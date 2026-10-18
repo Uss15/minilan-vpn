@@ -1,210 +1,132 @@
-// Simple one-screen UI: connect, private networks, public game rooms, peer list.
+// Shows the shared MiniLAN web UI (same as on PC) in a full-screen WebView, served by LocalApi.
+// Phone-only actions (VPN consent, connect/disconnect, clipboard, links) go through a small JS bridge.
 package com.minilan
 
 import android.Manifest
 import android.app.Activity
-import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.Typeface
+import android.graphics.Color
+import android.net.Uri
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.text.InputType
-import android.view.ViewGroup.LayoutParams.MATCH_PARENT
-import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.Spinner
-import android.widget.TextView
-import android.widget.Toast
-import org.json.JSONArray
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import org.json.JSONObject
 
 class MainActivity : Activity() {
-    private val ui = Handler(Looper.getMainLooper())
-    private lateinit var server: EditText
-    private lateinit var name: EditText
-    private lateinit var connectBtn: Button
-    private lateinit var statusText: TextView
-    private lateinit var peersBox: LinearLayout
-    private lateinit var roomsBox: LinearLayout
-    private lateinit var gameSpinner: Spinner
-    private var gameIds: List<String> = emptyList()
-    private val prefs by lazy { getSharedPreferences("ui", Context.MODE_PRIVATE) }
+    companion object {
+        /** One API server per process, so it survives activity recreation (rotation etc.). */
+        private var api: LocalApi? = null
+    }
 
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
-    private fun label(t: String, bold: Boolean = false, size: Float = 14f) = TextView(this).apply {
-        text = t; textSize = size; if (bold) setTypeface(typeface, Typeface.BOLD); setPadding(0, dp(10), 0, dp(4))
-    }
-    private fun input(hint: String, password: Boolean = false) = EditText(this).apply {
-        this.hint = hint; isSingleLine = true
-        if (password) inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-    }
-    private fun button(t: String, onClick: () -> Unit) = Button(this).apply { text = t; setOnClickListener { onClick() } }
-    private fun row(vararg views: android.view.View) = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        views.forEach { addView(it, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)) }
-    }
+    private lateinit var web: WebView
+    private val prefs by lazy { getSharedPreferences("ui", Context.MODE_PRIVATE) }
+    private var pendingServer = ""
+    private var pendingName = ""
+    private var pendingHost = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(32)) }
+        window.statusBarColor = Color.parseColor("#0a0b14")
+        window.navigationBarColor = Color.parseColor("#0a0b14")
 
-        col.addView(label("MiniLAN", bold = true, size = 22f))
-        statusText = label("Not connected")
-        col.addView(statusText)
+        val app = applicationContext
+        val local = api ?: LocalApi(
+            page = { app.assets.open("index.html") },
+            offlineState = {
+                val p = app.getSharedPreferences("ui", Context.MODE_PRIVATE)
+                JSONObject()
+                    .put("server", p.getString("server", app.getString(R.string.default_server)))
+                    .put("name", p.getString("name", Build.MODEL))
+                    .put("connecting", MiniLanVpnService.connecting)
+                    .put("error", MiniLanVpnService.lastError ?: JSONObject.NULL)
+            },
+            engine = { MiniLanVpnService.engine },
+            hostInfo = { MiniLanVpnService.hostInfo() },
+        ).start().also { api = it }
 
-        server = input("Server, e.g. http://203.0.113.10:8080").apply { setText(prefs.getString("server", getString(R.string.default_server))) }
-        name = input("Your name").apply { setText(prefs.getString("name", Build.MODEL)) }
-        connectBtn = button("Connect") { toggleConnect() }
-        col.addView(server); col.addView(name); col.addView(connectBtn)
-
-        col.addView(label("Private network", bold = true, size = 16f))
-        val netName = input("Network name")
-        val netPw = input("Password (6+ chars)", password = true)
-        col.addView(netName); col.addView(netPw)
-        col.addView(row(
-            button("Create") { act { it.createNetwork(netName.text.toString(), netPw.text.toString()) } },
-            button("Join") { act { it.joinNetwork(netName.text.toString(), netPw.text.toString()) } },
-        ))
-
-        col.addView(label("Game rooms", bold = true, size = 16f))
-        gameSpinner = Spinner(this)
-        col.addView(gameSpinner)
-        col.addView(row(
-            button("Find rooms") { loadRooms() },
-            button("Host room") { hostRoom() },
-        ))
-        roomsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(roomsBox)
-
-        col.addView(button("❤ Donate to MiniLAN") {
-            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/sponsors/Uss15")))
-        })
-
-        col.addView(label("Players", bold = true, size = 16f))
-        peersBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(peersBox)
-
-        setContentView(ScrollView(this).apply { addView(col, MATCH_PARENT, WRAP_CONTENT) })
-        if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2)
-        refreshLoop()
-    }
-
-    private fun toggleConnect() {
-        if (MiniLanVpnService.engine != null || MiniLanVpnService.connecting) {
-            startService(Intent(this, MiniLanVpnService::class.java).setAction(MiniLanVpnService.ACTION_DISCONNECT))
-            return
+        web = WebView(this).apply {
+            setBackgroundColor(Color.parseColor("#0a0b14"))
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.allowFileAccess = false
+            webChromeClient = WebChromeClient() // enables prompt() for room passwords
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
+                    if (req.url.host == "127.0.0.1") return false
+                    startActivity(Intent(Intent.ACTION_VIEW, req.url)) // external links open in the browser
+                    return true
+                }
+            }
+            addJavascriptInterface(Bridge(local.token), "MiniLANAndroid")
+            loadUrl("http://127.0.0.1:${local.port}/")
         }
-        prefs.edit().putString("server", server.text.toString().trim()).putString("name", name.text.toString().trim()).apply()
-        val consent = VpnService.prepare(this)
-        if (consent != null) startActivityForResult(consent, 1) else onActivityResult(1, RESULT_OK, null)
+        setContentView(web)
+        if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2)
     }
 
-    @Deprecated("Activity result API kept simple on purpose")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode != 1 || resultCode != RESULT_OK) return
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (web.canGoBack()) web.goBack() else @Suppress("DEPRECATION") super.onBackPressed()
+    }
+
+    inner class Bridge(private val tok: String) {
+        @JavascriptInterface fun token(): String = tok
+
+        @JavascriptInterface fun connect(server: String, name: String) = runOnUiThread {
+            var s = server.trim()
+            if (!Regex("^https?://").containsMatchIn(s)) s = "http://$s"
+            if (!s.startsWith("https") && !Regex(":\\d+/?$").containsMatchIn(s)) s = s.trimEnd('/') + ":8080"
+            pendingServer = s
+            pendingHost = false
+            pendingName = name.trim().ifEmpty { Build.MODEL }
+            prefs.edit().putString("server", pendingServer).putString("name", pendingName).apply()
+            MiniLanVpnService.lastError = null
+            val consent = VpnService.prepare(this@MainActivity)
+            if (consent != null) @Suppress("DEPRECATION") startActivityForResult(consent, 1)
+            else startVpn()
+        }
+
+        /** Host the MiniLAN server on this phone (friends on the same Wi-Fi or this phone's hotspot join it). */
+        @JavascriptInterface fun host(name: String) = runOnUiThread {
+            pendingHost = true
+            pendingServer = ""
+            pendingName = name.trim().ifEmpty { Build.MODEL }
+            prefs.edit().putString("name", pendingName).apply()
+            MiniLanVpnService.lastError = null
+            val consent = VpnService.prepare(this@MainActivity)
+            if (consent != null) @Suppress("DEPRECATION") startActivityForResult(consent, 1) else startVpn()
+        }
+
+        @JavascriptInterface fun disconnect() = runOnUiThread {
+            startService(Intent(this@MainActivity, MiniLanVpnService::class.java).setAction(MiniLanVpnService.ACTION_DISCONNECT))
+        }
+
+        @JavascriptInterface fun openUrl(url: String) = runOnUiThread {
+            if (url.startsWith("https://")) startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }
+
+        @JavascriptInterface fun copy(text: String) = runOnUiThread {
+            (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("MiniLAN", text))
+        }
+    }
+
+    private fun startVpn() {
         val i = Intent(this, MiniLanVpnService::class.java).setAction(MiniLanVpnService.ACTION_CONNECT)
-            .putExtra("server", server.text.toString().trim()).putExtra("name", name.text.toString().trim())
+            .putExtra("server", pendingServer).putExtra("name", pendingName).putExtra("host", pendingHost)
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
     }
 
-    /** Runs a network action off the UI thread and reports the result. */
-    private fun act(f: (Engine) -> Unit) {
-        val e = MiniLanVpnService.engine ?: return toast("Connect first")
-        Thread {
-            val err = runCatching { f(e) }.exceptionOrNull()
-            ui.post { toast(err?.message ?: "Done") }
-        }.start()
-    }
-
-    private fun toast(t: String) = Toast.makeText(this, t, Toast.LENGTH_SHORT).show()
-
-    private fun ensureGames(e: Engine) {
-        if (gameIds.isNotEmpty() || e.games.length() == 0) return
-        gameIds = e.games.keys().asSequence().filter { !it.startsWith("_") }.toList()
-        val titles = gameIds.map { e.games.getJSONObject(it).optString("title", it) }
-        gameSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, titles)
-        gameIds.indexOf("mc-bedrock").takeIf { it >= 0 }?.let { gameSpinner.setSelection(it) }
-    }
-
-    private fun selectedGame() = gameIds.getOrNull(gameSpinner.selectedItemPosition)
-
-    private fun loadRooms() {
-        val e = MiniLanVpnService.engine ?: return toast("Connect first")
-        val game = selectedGame() ?: return
-        Thread {
-            val rooms = runCatching { e.publicRooms(game) }
-            ui.post {
-                roomsBox.removeAllViews()
-                rooms.onFailure { toast(it.message ?: "error") }
-                rooms.onSuccess { arr -> showRooms(e, arr, game) }
-            }
-        }.start()
-    }
-
-    private fun showRooms(e: Engine, arr: JSONArray, game: String) {
-        val tip = e.games.optJSONObject(game)?.optString("tip").orEmpty()
-        if (tip.isNotEmpty()) roomsBox.addView(label("Tip: $tip", size = 12f))
-        if (arr.length() == 0) roomsBox.addView(label("No rooms yet. Host one!"))
-        for (i in 0 until arr.length()) {
-            val r = arr.getJSONObject(i)
-            val roomName = r.getString("name")
-            roomsBox.addView(row(
-                label("$roomName  (${r.getInt("online")}/${r.getInt("members")} online)${if (r.getBoolean("locked")) " 🔒" else ""}"),
-                button("Join") {
-                    if (r.getBoolean("locked")) askPassword { pw -> act { it.joinNetwork(roomName, pw) } }
-                    else act { it.joinNetwork(roomName, "") }
-                },
-            ))
-        }
-    }
-
-    private fun askPassword(then: (String) -> Unit) {
-        val pw = input("Password", password = true)
-        AlertDialog.Builder(this).setTitle("Room password").setView(pw)
-            .setPositiveButton("Join") { _, _ -> then(pw.text.toString()) }.setNegativeButton("Cancel", null).show()
-    }
-
-    private fun hostRoom() {
-        val game = selectedGame() ?: return toast("Connect first")
-        val roomName = input("Room name")
-        AlertDialog.Builder(this).setTitle("Host a public room").setView(roomName)
-            .setPositiveButton("Create") { _, _ -> act { it.createNetwork(roomName.text.toString(), "", public = true, game = game) } }
-            .setNegativeButton("Cancel", null).show()
-    }
-
-    private fun refreshLoop() {
-        val e = MiniLanVpnService.engine
-        connectBtn.text = if (e != null || MiniLanVpnService.connecting) "Disconnect" else "Connect"
-        if (e == null) {
-            statusText.text = MiniLanVpnService.lastError?.let { "Error: $it" } ?: if (MiniLanVpnService.connecting) "Connecting…" else "Not connected"
-            peersBox.removeAllViews()
-        } else {
-            ensureGames(e)
-            val s = e.status()
-            statusText.text = "You: ${s.ip}  ·  relay ${s.relay}\nPublic ${s.publicEndpoint ?: "?"}"
-            peersBox.removeAllViews()
-            for (i in 0 until s.networks.length()) {
-                val n = s.networks.getJSONObject(i)
-                val game = n.optString("game").takeIf { n.optBoolean("public") }
-                peersBox.addView(row(
-                    label("■ ${n.getString("name")}${game?.let { " · " + (e.games.optJSONObject(it)?.optString("title") ?: it) } ?: ""}", bold = true),
-                    button("Leave") { act { it.leaveNetwork(n.getString("name")) } },
-                ))
-                val members = n.getJSONArray("members")
-                for (j in 0 until members.length()) {
-                    val p = s.peers.firstOrNull { it.id == members.getInt(j) } ?: continue
-                    val state = when { !p.online -> "offline"; p.path == "relay" -> "Relay"; p.path.startsWith("direct") -> "Direct"; else -> "connecting…" }
-                    peersBox.addView(label("   ${p.name}  ${p.ip}  ·  $state${p.rtt?.let { "  ${it} ms" } ?: ""}"))
-                }
-            }
-        }
-        ui.postDelayed(::refreshLoop, 1500)
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode != 1) return
+        if (resultCode == RESULT_OK) startVpn() else MiniLanVpnService.lastError = "VPN permission was not granted"
     }
 }

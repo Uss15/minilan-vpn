@@ -68,7 +68,7 @@ const engine = new Engine({
 await engine.start();
 
 // ---- local UI / control API ----
-const uiHtml = fs.readFileSync(new URL('./ui.html', import.meta.url));
+const uiPath = new URL('./web/index.html', import.meta.url); // shared with the Android app
 const hostOk = (h) => h === `127.0.0.1:${uiPort}` || h === `localhost:${uiPort}`;
 
 http.createServer(async (req, res) => {
@@ -77,10 +77,13 @@ http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && req.url === '/') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'" });
-      return res.end(uiHtml);
+      return res.end(fs.readFileSync(uiPath));
     }
     if (req.method === 'GET' && req.url === '/api/status') {
-      return send(200, { ...engine.status(), server: serverUrl, hosting: !!hosted, hostInfo, canSwitch: !!configPath, tun: tunKind });
+      return send(200, {
+        ...engine.status(), connected: true, platform: 'pc',
+        server: serverUrl, hosting: !!hosted, hostInfo, canSwitch: !!configPath, tun: tunKind,
+      });
     }
     if (req.method === 'GET' && req.url === '/api/games') return send(200, games);
     if (req.method === 'GET' && req.url.startsWith('/api/rooms')) {

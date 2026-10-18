@@ -18,8 +18,8 @@ android {
         applicationId = "com.minilan"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
     signingConfigs {
         if (keyProps.containsKey("storeFile")) create("release") {
@@ -41,6 +41,9 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isReturnDefaultValues = true }
+    // The UI is shared with the desktop client: client/web/index.html
+    sourceSets["main"].assets.srcDir("../../client/web")
+    sourceSets["main"].assets.srcDir("../../shared") // games.json for the phone-hosted server
 }
 
 dependencies {

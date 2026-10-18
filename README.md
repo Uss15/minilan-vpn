@@ -7,7 +7,8 @@ A free, open-source virtual LAN for gaming, in the spirit of Radmin VPN and Hama
   - Players connect directly to each other; a relay is used only if that's impossible.
   - Traffic is encrypted end to end (X25519 + ChaCha20-Poly1305).
   - Strangers in public rooms can only reach that game's ports.
-- 🖥️ **Host it yourself.** Any player's PC can be the server with one click, or you can run it on a VPS or a network of relay servers.
+- 🖥️ **Host it yourself.** Any player's PC **or Android phone** can be the server with one click. A phone hotspot works with no internet at all. You can also run it on a VPS or a network of relay servers. 👉 **[How to host](HOSTING.md)**
+- ✨ **One app look on PC and phone:** the same modern UI everywhere.
 
 > ❤ **Like MiniLAN? [Support the project](https://github.com/sponsors/Uss15).** Click the **Sponsor** button at the top of this page.
 
@@ -37,6 +38,7 @@ To host *without* playing on that PC (e.g. an always-on spare PC), double-click 
 
 1. Download **`MiniLAN-android.apk`** on your phone and open it. Allow "install unknown apps" for your browser when asked.
 2. Enter the server address and your name, tap **Connect**, and accept the VPN prompt.
+   Or tap **📶 Host the server on this phone**: friends join your Wi-Fi or hotspot and connect to the address shown.
 3. Join a network, or open **Game rooms**, pick a game, then join or host.
 4. Switch to your game. MiniLAN keeps running with a notification, and phones and PCs see each other.
    - **Minecraft Bedrock:** *Friends → LAN Games*, or *Add Server* with the host's `100.77` IP, port 19132.
@@ -44,6 +46,9 @@ To host *without* playing on that PC (e.g. an always-on spare PC), double-click 
    - Games that only broadcast to the Wi-Fi subnet won't show up in the LAN list; join by IP.
 
 ### Hosting for friends over the Internet
+
+The full step-by-step guide (PC, phone, VPS, router setup, troubleshooting) is in **[HOSTING.md](HOSTING.md)**.
+
 
 If the server runs on a home PC, friends outside your house can reach it only after you **forward TCP 8080 and UDP 8081** on your router to that PC. Your router's admin page is usually `192.168.1.1` or `192.168.0.1`; look for *Port Forwarding* or *Virtual Server*. Then give friends your **public IP**, which MiniLAN shows in the **Servers** tab.
 
@@ -116,7 +121,9 @@ The full wire format is in [PROTOCOL.md](PROTOCOL.md).
 | Windows server launcher | `server/launcher.js` |
 | Desktop engine, web UI, launcher | `client/engine.js`, `client/main.js`, `client/ui.html`, `client/launcher.js` |
 | Windows adapter (Wintun via koffi) | `client/tun/wintun.js` |
-| Android app (Kotlin, VpnService) | `android/` |
+| Shared UI (PC web page and Android WebView) | `client/web/index.html` |
+| Android app (Kotlin, VpnService, WebView UI, local API) | `android/` |
+| Phone-hosted server (Kotlin port of the coordinator) | `android/.../MiniServer.kt` |
 | Game profiles | `shared/games.json` |
 
 ### Security notes
@@ -142,7 +149,8 @@ node client/main.js --server http://HOST:8080 --tun virtual   # run without admi
   cd android && ./gradlew testDebugUnitTest assembleRelease
   ```
   - `ProtoVectorsTest` checks the Kotlin crypto byte-for-byte against the Node implementation; regenerate the vectors with `npm run vectors`.
-  - `InteropTest` runs the Android engine against a Node peer.
+  - `InteropTest` runs the Android engine against a Node peer, and checks the in-app API.
+  - `MiniServerTest` runs real desktop clients and the Android engine against the phone-hosted server.
   - Release signing reads `MINILAN_KEYSTORE_PROPS`; without it the build is debug-signed.
 
 ## Status and limits

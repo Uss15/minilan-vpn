@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0b14">
+<title>MiniLAN</title>
+<style>
+  :root {
+    --bg: #0a0b14; --bg2: #11131f; --card: rgba(255,255,255,.045); --card-hi: rgba(255,255,255,.075);
+    --line: rgba(255,255,255,.09); --text: #eef0ff; --muted: #8e93b5; --dim: #5d6284;
+    --a1: #7c5cff; --a2: #00d4ff; --grad: linear-gradient(135deg, var(--a1), var(--a2));
+    --ok: #2ee59d; --warn: #ffb547; --bad: #ff5c7a; --pink: #ff5cb8;
+    --r: 16px; --font: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font: 15px/1.45 var(--font); color: var(--text); background: var(--bg);
+    background-image:
+      radial-gradient(900px 500px at 10% -10%, rgba(124,92,255,.22), transparent 60%),
+      radial-gradient(700px 400px at 100% 0%, rgba(0,212,255,.14), transparent 60%),
+      radial-gradient(600px 600px at 50% 120%, rgba(255,92,184,.08), transparent 60%);
+    background-attachment: fixed;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  .mono { font-family: var(--mono); }
+  .muted { color: var(--muted); } .dim { color: var(--dim); }
+
+  /* ---------- header ---------- */
+  header { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    background: rgba(10,11,20,.72); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top); }
+  .bar { max-width: 1100px; margin: 0 auto; display: flex; align-items: center; gap: 14px; padding: 12px 20px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: .2px; }
+  .logo svg { width: 30px; height: 30px; filter: drop-shadow(0 0 10px rgba(124,92,255,.6)); }
+  .logo span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--line); font-size: 13px; white-space: nowrap; }
+  .tabs { display: flex; gap: 4px; margin-left: auto; padding: 4px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .tabs button { border: 0; background: none; color: var(--muted); padding: 7px 14px; border-radius: 9px; cursor: pointer; display: flex; gap: 7px; align-items: center; font-weight: 600; font-size: 14px; }
+  .tabs button svg { width: 17px; height: 17px; }
+  .tabs button.on { color: #fff; background: var(--grad); box-shadow: 0 4px 18px rgba(124,92,255,.35); }
+  .donate { border: 1px solid rgba(255,92,184,.35); background: rgba(255,92,184,.1); color: var(--pink); border-radius: 10px; padding: 7px 12px; cursor: pointer; font-weight: 600; font-size: 14px; }
+  .donate:hover { background: rgba(255,92,184,.18); }
+
+  /* ---------- layout ---------- */
+  main { max-width: 1100px; margin: 0 auto; padding: 22px 20px 40px; }
+  .view { display: none; animation: fade .25s ease; } .view.on { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .grid2 { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; }
+  @media (min-width: 761px) { #roomCard { position: sticky; top: 84px; } }
+  .grid2 > * { min-width: 0; } /* let wide children (the game row) scroll instead of stretching the page */
+  body { overflow-x: hidden; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; margin-bottom: 18px; }
+  .card h2 { margin: 0 0 14px; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 10px; letter-spacing: .2px; }
+  .card h2 .grow { flex: 1; }
+  h3.section { font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); margin: 26px 0 12px; font-weight: 700; }
+
+  /* hero */
+  .hero { position: relative; overflow: hidden; background: linear-gradient(135deg, rgba(124,92,255,.22), rgba(0,212,255,.12)); border-color: rgba(124,92,255,.35); }
+  .hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 220px; height: 220px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,212,255,.35), transparent 70%); pointer-events: none; }
+  .hero .label { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-weight: 700; }
+  .hero .ip { font: 800 34px/1.15 var(--mono); margin: 6px 0 4px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .hero .meta { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .hero .meta b { color: var(--text); font-weight: 600; }
+
+  /* controls */
+  input, select { width: 100%; background: rgba(0,0,0,.28); border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  input:focus, select:focus { border-color: var(--a1); box-shadow: 0 0 0 3px rgba(124,92,255,.25); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row > input { flex: 1 1 170px; width: auto; }
+  .btn { border: 0; border-radius: 11px; padding: 11px 18px; font-weight: 700; cursor: pointer; transition: transform .08s, filter .15s, box-shadow .15s; white-space: nowrap; }
+  .btn:active { transform: scale(.97); }
+  .btn.primary { background: var(--grad); color: #fff; box-shadow: 0 6px 20px rgba(124,92,255,.35); }
+  .btn.primary:hover { filter: brightness(1.1); }
+  .btn.ghost { background: var(--card-hi); border: 1px solid var(--line); color: var(--text); }
+  .btn.ghost:hover { background: rgba(255,255,255,.11); }
+  .btn.danger { background: rgba(255,92,122,.12); border: 1px solid rgba(255,92,122,.35); color: var(--bad); }
+  .btn.sm { padding: 6px 12px; font-size: 13px; border-radius: 9px; }
+  .icon-btn { border: 1px solid var(--line); background: var(--card-hi); border-radius: 9px; width: 34px; height: 34px; display: inline-grid; place-items: center; cursor: pointer; color: var(--muted); }
+  .icon-btn:hover { color: var(--text); }
+  .seg { display: inline-flex; padding: 3px; background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 11px; margin-bottom: 12px; }
+  .seg button { border: 0; background: none; color: var(--muted); padding: 6px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
+  .seg button.on { background: var(--card-hi); color: var(--text); }
+
+  /* badges, chips */
+  .badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  .badge.admin { color: var(--warn); border-color: rgba(255,181,71,.35); background: rgba(255,181,71,.08); }
+  .badge.game { color: var(--a2); border-color: rgba(0,212,255,.35); background: rgba(0,212,255,.08); text-transform: none; letter-spacing: 0; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+  .chip.direct { color: var(--ok); background: rgba(46,229,157,.1); }
+  .chip.relay { color: var(--warn); background: rgba(255,181,71,.1); }
+  .chip.off { color: var(--dim); background: rgba(255,255,255,.04); }
+  .chip.wait { color: var(--a2); background: rgba(0,212,255,.08); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .chip.direct .dot, .pill .dot.on { box-shadow: 0 0 0 0 rgba(46,229,157,.6); animation: pulse 2s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(46,229,157,.55); } 70% { box-shadow: 0 0 0 8px rgba(46,229,157,0); } 100% { box-shadow: 0 0 0 0 rgba(46,229,157,0); } }
+
+  /* members */
+  .member { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 12px; padding: 10px 4px; border-top: 1px solid var(--line); }
+  .member .right { display: flex; align-items: center; gap: 10px; }
+  @media (max-width: 760px) { .member .right { flex-direction: column; align-items: flex-end; gap: 4px; } .member .ping { min-width: 0; font-size: 12px; } }
+  .member:first-child { border-top: 0; }
+  .avatar { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 15px; }
+  .member .name { font-weight: 650; } .member .sub { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .ping { font: 600 13px var(--mono); color: var(--muted); min-width: 56px; text-align: right; }
+  .ping.good { color: var(--ok); } .ping.mid { color: var(--warn); } .ping.bad { color: var(--bad); }
+
+  /* games */
+  .search { margin-bottom: 14px; }
+  .games { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .tile { position: relative; border: 1px solid var(--line); background: var(--card); border-radius: 14px; padding: 14px; cursor: pointer; transition: transform .12s, border-color .15s, background .15s; text-align: left; min-height: 104px; }
+  .tile:hover { transform: translateY(-2px); border-color: rgba(124,92,255,.5); background: var(--card-hi); }
+  .tile.on { border-color: var(--a1); background: linear-gradient(135deg, rgba(124,92,255,.25), rgba(0,212,255,.1)); box-shadow: 0 8px 26px rgba(124,92,255,.25); }
+  .tile .emo { font-size: 28px; line-height: 1; }
+  .tile .t { font-weight: 650; font-size: 13px; margin-top: 10px; line-height: 1.3; }
+  .room { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: rgba(0,0,0,.2); border: 1px solid var(--line); margin-bottom: 8px; }
+  .room .n { flex: 1; font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .players { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .players b { color: var(--ok); }
+  .tip { font-size: 13px; color: var(--muted); padding: 10px 12px; border-radius: 11px; background: rgba(0,212,255,.06); border: 1px solid rgba(0,212,255,.18); margin: 0 0 14px; }
+  .tip b { color: var(--a2); }
+
+  /* servers */
+  .relay { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 11px 4px; border-top: 1px solid var(--line); }
+  .relay:first-child { border-top: 0; }
+  .bars { display: inline-flex; gap: 2px; align-items: flex-end; height: 14px; }
+  .bars i { width: 4px; border-radius: 1px; background: var(--dim); }
+  .bars i:nth-child(1) { height: 5px; } .bars i:nth-child(2) { height: 9px; } .bars i:nth-child(3) { height: 14px; }
+  .bars.b3 i, .bars.b2 i:nth-child(-n+2), .bars.b1 i:nth-child(1) { background: var(--ok); }
+  .addr { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 11px; margin-top: 8px; }
+  .addr .mono { flex: 1; font-size: 15px; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+  .card { min-width: 0; }
+  .tip, .dim, .muted { overflow-wrap: anywhere; }
+
+  .empty { text-align: center; padding: 28px 16px; color: var(--muted); }
+  .empty .big { font-size: 38px; margin-bottom: 8px; }
+
+  /* connect screen (Android, not connected) */
+  #connect { display: none; min-height: calc(100vh - 70px); place-items: center; padding: 24px 20px; }
+  #connect.on { display: grid; }
+  #connect .box { width: 100%; max-width: 420px; text-align: center; }
+  #connect .orb { width: 120px; height: 120px; margin: 0 auto 18px; border-radius: 50%; background: var(--grad); display: grid; place-items: center;
+    box-shadow: 0 0 60px rgba(124,92,255,.55); animation: float 4s ease-in-out infinite; }
+  #connect .orb svg { width: 58px; height: 58px; }
+  @keyframes float { 50% { transform: translateY(-8px); } }
+  #connect h1 { margin: 0 0 6px; font-size: 26px; }
+  #connect .fields { display: grid; gap: 10px; margin: 22px 0 14px; text-align: left; }
+  #connect label { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .5px; }
+  .err { color: var(--bad); font-size: 13px; min-height: 18px; }
+
+  #toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 30px); opacity: 0; transition: .25s; z-index: 50;
+    background: #1b1e30; border: 1px solid var(--line); padding: 11px 18px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.5); font-weight: 600; pointer-events: none; max-width: 90vw; }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ---------- phone ---------- */
+  @media (max-width: 760px) {
+    /* backdrop-filter would make the header the containing block of the fixed bottom nav */
+    header { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(10,11,20,.96); }
+    .bar { padding: 10px 14px; gap: 10px; }
+    .hero .ip .icon-btn { width: 30px; height: 30px; }
+    .card h2 { flex-wrap: wrap; row-gap: 8px; }
+    .card h2 .grow { flex: 1 1 60%; min-width: 0; }
+    .bar .pill.ipPill { display: none; }
+    .tabs { position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); margin: 0; justify-content: space-around; z-index: 30;
+      background: rgba(17,19,31,.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 18px; padding: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+    .tabs button { flex-direction: column; gap: 3px; font-size: 11px; padding: 7px 4px; flex: 1; }
+    .tabs button svg { width: 21px; height: 21px; }
+    .donate { margin-left: auto; padding: 6px 10px; font-size: 13px; }
+    main { padding: 16px 14px 110px; }
+    .grid2 { grid-template-columns: 1fr; gap: 0; }
+    .hero .ip { font-size: 28px; }
+    .games { display: flex; overflow-x: auto; gap: 10px; padding: 2px 2px 10px; margin: 0 -14px 14px; padding-left: 14px; scroll-snap-type: x proximity; scrollbar-width: none; }
+    .games::-webkit-scrollbar { display: none; }
+    .tile { flex: 0 0 112px; min-height: 96px; scroll-snap-align: start; padding: 12px; }
+    .tile .t { font-size: 12px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    #toast { bottom: calc(96px + env(safe-area-inset-bottom)); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="logo">
+      <svg viewBox="0 0 32 32" fill="none"><defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7c5cff"/><stop offset="1" stop-color="#00d4ff"/></linearGradient></defs>
+        <rect x="2" y="2" width="28" height="28" rx="9" fill="url(#g)"/><circle cx="10" cy="11" r="3" fill="#fff"/><circle cx="22" cy="11" r="3" fill="#fff"/><circle cx="16" cy="22" r="3" fill="#fff"/>
+        <path d="M10 11L22 11M10 11L16 22M22 11L16 22" stroke="#fff" stroke-width="1.6" opacity=".85"/></svg>
+      <span>MiniLAN</span>
+    </div>
+    <div class="pill ipPill" id="statusPill"><span class="dot"></span><span>Connecting…</span></div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="home" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.2c2.9.3 5 2.6 5 5.8"/></svg>Networks</button>
+      <button data-tab="games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12a4 4 0 0 1 3.9 4.9l-1 4.3a2.5 2.5 0 0 1-4.4.9L15 16H9l-1.5 2.1a2.5 2.5 0 0 1-4.4-.9l-1-4.3A4 4 0 0 1 6 8z"/><path d="M8 11v3M6.5 12.5h3"/><circle cx="16" cy="11.5" r=".6" fill="currentColor"/><circle cx="17.5" cy="13.5" r=".6" fill="currentColor"/></svg>Game rooms</button>
+      <button data-tab="servers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>Servers</button>
+    </nav>
+    <button class="donate" id="donate">❤ Donate</button>
+  </div>
+</header>
+
+<section id="connect">
+  <div class="box">
+    <div class="orb"><svg viewBox="0 0 32 32" fill="none"><circle cx="10" cy="11" r="3" fill="#fff"/><circle cx="22" cy="11" r="3" fill="#fff"/><circle cx="16" cy="22" r="3" fill="#fff"/><path d="M10 11L22 11M10 11L16 22M22 11L16 22" stroke="#fff" stroke-width="1.6"/></svg></div>
+    <h1>Play LAN games anywhere</h1>
+    <div class="muted">Join your friends' virtual LAN, on phone or PC.</div>
+    <div class="fields">
+      <label for="cServer">SERVER ADDRESS</label>
+      <input id="cServer" placeholder="e.g. 192.168.1.20 or vpn.example.com" autocomplete="off" autocapitalize="off">
+      <label for="cName">PLAYER NAME</label>
+      <input id="cName" placeholder="Your name" maxlength="32">
+    </div>
+    <div class="err" id="cErr"></div>
+    <button class="btn primary" id="cGo" style="width:100%;padding:14px">Connect</button>
+    <div id="hostOpt" style="display:none">
+      <div class="dim" style="margin:16px 0 10px;font-size:12px;letter-spacing:1px">— OR —</div>
+      <button class="btn ghost" id="cHost" style="width:100%;padding:13px">📶 Host the server on this phone</button>
+      <div class="dim" style="font-size:12px;margin-top:8px">Friends join your Wi-Fi or your phone's hotspot, then connect to the address MiniLAN shows you. Works without internet.</div>
+    </div>
+    <div style="margin-top:18px"><a href="#" class="howto" style="color:var(--a2);font-size:13px">How do I host a server? →</a></div>
+  </div>
+</section>
+
+<main id="app">
+  <!-- NETWORKS -->
+  <section class="view on" id="v-home">
+    <div class="grid2">
+      <div class="card hero">
+        <div class="label">Your virtual IP</div>
+        <div class="ip"><span id="myIp">—</span><button class="icon-btn" id="copyIp" title="Copy">⧉</button></div>
+        <div class="muted" id="myName"></div>
+        <div class="meta">
+          <span>Public <b class="mono" id="myPub">—</b></span>
+          <span>Relay <b id="myRelay">—</b></span>
+          <span>Online peers <b id="myPeers">0</b></span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="seg" id="netMode"><button data-m="join" class="on">Join network</button><button data-m="create">Create network</button></div>
+        <div class="row" style="margin-bottom:10px"><input id="nName" placeholder="Network name" autocomplete="off"></div>
+        <div class="row"><input id="nPw" type="password" placeholder="Password (6+ characters)"><button class="btn primary" id="nGo">Join</button></div>
+      </div>
+    </div>
+    <h3 class="section">Your networks</h3>
+    <div id="netList"></div>
+  </section>
+
+  <!-- GAMES -->
+  <section class="view" id="v-games">
+    <div class="grid2">
+      <div>
+        <input class="search" id="gSearch" placeholder="🔍  Search games…" autocomplete="off">
+        <div class="games" id="gameGrid"></div>
+      </div>
+      <div>
+        <div class="card" id="roomCard">
+          <h2><span id="gEmo" style="font-size:22px">🎮</span><span class="grow" id="gTitle">Pick a game</span><button class="icon-btn" id="gRefresh" title="Refresh">↻</button></h2>
+          <div id="gTip"></div>
+          <div id="rooms"></div>
+          <h3 class="section" style="margin-top:18px">Host a room</h3>
+          <div class="row" style="margin-bottom:10px"><input id="rName" placeholder="Room name, e.g. ZH 2v2 EU" autocomplete="off"></div>
+          <div class="row"><input id="rPw" type="password" placeholder="Password (optional)"><button class="btn primary" id="rGo">Create</button></div>
+          <div class="dim" style="font-size:12px;margin-top:10px">Strangers in public rooms can only reach this game's ports. Your private networks stay fully trusted.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SERVERS -->
+  <section class="view" id="v-servers">
+    <div class="grid2">
+      <div class="card">
+        <h2>🖥️ <span class="grow">Server</span></h2>
+        <div class="muted" style="font-size:13px">Connected to</div>
+        <div class="addr"><span class="mono" id="srvUrl">—</span></div>
+        <div id="hostBox" style="margin-top:16px"></div>
+        <div style="margin-top:14px"><a href="#" class="howto" style="color:var(--a2);font-size:13px">📖 How to host a server (PC, phone, VPS) →</a></div>
+      </div>
+      <div class="card">
+        <h2>📡 <span class="grow">Relay servers</span></h2>
+        <div id="relays"></div>
+        <div class="dim" style="font-size:12px;margin-top:10px">Used only when players can't connect directly. The fastest one is picked automatically; tap one to pin it.</div>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const NATIVE = window.MiniLANAndroid || null; // present inside the Android app
+const TOKEN = NATIVE ? NATIVE.token() : '1';
+const EMOJI = {
+  generals: '🎖️', ra2: '⚡', 'tiberian-sun': '☢️', warcraft3: '🐺', starcraft: '👾', diablo2: '😈', aoe2: '🏰', aoe2hd: '🏰',
+  minecraft: '⛏️', 'mc-bedrock': '📦', cs16: '🔫', source: '🎯', terraria: '🌳', 'terraria-mobile': '🌳', factorio: '⚙️',
+  valheim: '⚔️', stardew: '🌾', halo: '🌌', bf1942: '✈️', 'among-us': '🚀', mindustry: '🏭', bombsquad: '💣', 'worms-armageddon': '🐛', other: '🎮',
+};
+const emojiFor = (id) => EMOJI[id] || (id.startsWith('generals') ? '🎖️' : '🎮');
+
+let games = {}, st = null, selGame = null, netMode = 'join', lastRoomsFor = null;
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined
+    ? { headers: { 'x-minilan': TOKEN } }
+    : { method: 'POST', headers: { 'content-type': 'application/json', 'x-minilan': TOKEN }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  return j;
+}
+function toast(t) { const m = $('#toast'); m.textContent = t; m.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => m.classList.remove('on'), 2800); }
+const act = (fn, ok) => async () => { try { await fn(); if (ok) toast(ok); refresh(); } catch (e) { toast('⚠ ' + e.message); } };
+function copy(text) {
+  if (NATIVE) { NATIVE.copy(text); toast('Copied ' + text); return; }
+  navigator.clipboard?.writeText(text).then(() => toast('Copied ' + text), () => toast(text));
+}
+function hue(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+function avatar(name) {
+  const h = hue(name);
+  const ini = String(name || '?').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  return `<div class="avatar" style="background:linear-gradient(135deg,hsl(${h} 75% 55%),hsl(${(h + 50) % 360} 80% 45%))">${esc(ini)}</div>`;
+}
+function chip(p) {
+  if (!p.online) return '<span class="chip off"><span class="dot"></span>Offline</span>';
+  if (p.path === 'none') return '<span class="chip wait"><span class="dot"></span>Connecting</span>';
+  if (p.path === 'relay') return '<span class="chip relay"><span class="dot"></span>Relay</span>';
+  return '<span class="chip direct"><span class="dot"></span>Direct</span>';
+}
+function pingCls(ms) { return ms == null ? '' : ms < 60 ? 'good' : ms < 150 ? 'mid' : 'bad'; }
+
+// ---------- tabs ----------
+document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('#tabs button, .view').forEach((x) => x.classList.remove('on'));
+  b.classList.add('on'); $('#v-' + b.dataset.tab).classList.add('on');
+  if (b.dataset.tab === 'games' && selGame) loadRooms();
+  window.scrollTo({ top: 0 });
+});
+$('#donate').onclick = () => { const u = 'https://github.com/sponsors/Uss15'; NATIVE ? NATIVE.openUrl(u) : window.open(u, '_blank', 'noopener'); };
+$('#copyIp').onclick = () => st?.self?.ip && copy(st.self.ip);
+
+// ---------- networks ----------
+document.querySelectorAll('#netMode button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('#netMode button').forEach((x) => x.classList.toggle('on', x === b));
+  netMode = b.dataset.m; $('#nGo').textContent = netMode === 'join' ? 'Join' : 'Create';
+});
+$('#nGo').onclick = act(async () => {
+  const name = $('#nName').value.trim(), password = $('#nPw').value;
+  await api(netMode === 'join' ? '/api/join' : '/api/create', { name, password });
+  $('#nPw').value = '';
+}, 'Done!');
+
+function renderNetworks(s) {
+  const peers = new Map(s.peers.map((p) => [p.id, p]));
+  if (!s.networks.length) {
+    $('#netList').innerHTML = `<div class="card empty"><div class="big">🛰️</div>You're not in any network yet.<br>Join one above, or jump into a <b>Game room</b>.</div>`;
+    return;
+  }
+  $('#netList').innerHTML = s.networks.map((n) => {
+    const others = n.members.filter((id) => id !== s.self.id).map((id) => peers.get(id)).filter(Boolean)
+      .sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name));
+    const online = others.filter((p) => p.online).length + 1;
+    const g = n.public ? games[n.game] : null;
+    return `<div class="card">
+      <h2>${n.public ? `<span style="font-size:20px">${emojiFor(n.game)}</span>` : '🔒'}
+        <span class="grow">${esc(n.name)} <span class="dim" style="font-weight:500;font-size:13px">· ${online}/${n.members.length} online</span></span>
+        ${n.role === 'admin' ? '<span class="badge admin">Admin</span>' : ''}${g ? `<span class="badge game">${esc(g.title)}</span>` : ''}
+        <button class="btn danger sm" data-leave="${esc(n.name)}">Leave</button></h2>
+      ${g?.tip ? `<div class="tip"><b>Tip:</b> ${esc(g.tip)}</div>` : ''}
+      <div class="member">${avatar(s.self.name)}<div><div class="name">${esc(s.self.name)} <span class="dim">(you)</span></div><div class="sub">${esc(s.self.ip)}</div></div>
+        <div class="right"><span class="chip direct"><span class="dot"></span>You</span></div></div>
+      ${others.map((p) => `<div class="member">${avatar(p.name)}
+        <div><div class="name">${esc(p.name)}${p.trusted ? '' : ' <span class="badge" style="margin-left:4px">game-only</span>'}</div><div class="sub">${esc(p.ip)}</div></div>
+        <div class="right">${chip(p)}
+        <button class="ping ${pingCls(p.rtt)}" style="background:none;border:0;cursor:pointer;padding:0" data-ping="${p.id}" title="Ping">${p.rtt != null ? p.rtt + ' ms' : 'ping'}</button></div></div>`).join('')}
+    </div>`;
+  }).join('');
+  document.querySelectorAll('[data-leave]').forEach((b) => b.onclick = act(() => api('/api/leave', { name: b.dataset.leave }), 'Left network'));
+  document.querySelectorAll('[data-ping]').forEach((b) => b.onclick = async () => {
+    b.textContent = '…';
+    try { const r = await api('/api/ping', { id: b.dataset.ping }); b.textContent = r.rtt + ' ms'; b.className = 'ping ' + pingCls(r.rtt); } catch (e) { b.textContent = 'timeout'; }
+  });
+}
+
+// ---------- games ----------
+function renderGameGrid() {
+  const q = $('#gSearch').value.trim().toLowerCase();
+  const list = Object.entries(games).filter(([k, g]) => !k.startsWith('_') && (!q || g.title.toLowerCase().includes(q) || k.includes(q)));
+  $('#gameGrid').innerHTML = list.map(([k, g]) => `<button class="tile ${k === selGame ? 'on' : ''}" data-g="${k}"><div class="emo">${emojiFor(k)}</div><div class="t">${esc(g.title)}</div></button>`).join('')
+    || '<div class="empty">No game matches.</div>';
+  document.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => {
+    const x = $('#gameGrid').scrollLeft; selGame = b.dataset.g; renderGameGrid(); $('#gameGrid').scrollLeft = x; loadRooms();
+  });
+}
+$('#gSearch').oninput = renderGameGrid;
+$('#gRefresh').onclick = () => loadRooms();
+
+async function loadRooms() {
+  if (!selGame || !st?.connected) return;
+  const g = games[selGame];
+  $('#gEmo').textContent = emojiFor(selGame); $('#gTitle').textContent = g.title;
+  $('#gTip').innerHTML = g.tip ? `<div class="tip"><b>Tip:</b> ${esc(g.tip)}</div>` : '';
+  if (lastRoomsFor !== selGame) $('#rooms').innerHTML = '<div class="empty dim">Loading rooms…</div>';
+  lastRoomsFor = selGame;
+  try {
+    const { rooms } = await api('/api/rooms?game=' + encodeURIComponent(selGame));
+    const mine = new Set((st?.networks || []).map((n) => n.name.toLowerCase()));
+    $('#rooms').innerHTML = rooms.length ? rooms.map((r) => `<div class="room">
+        <div class="n">${r.locked ? '🔒 ' : ''}${esc(r.name)}</div>
+        <span class="players"><b>${r.online}</b> / ${r.members} online</span>
+        ${mine.has(r.name.toLowerCase()) ? '<span class="chip direct">Joined</span>' : `<button class="btn primary sm" data-join="${esc(r.name)}" data-locked="${r.locked}">Join</button>`}
+      </div>`).join('')
+      : `<div class="empty"><div class="big">${emojiFor(selGame)}</div>No rooms yet. Be the first to host one!</div>`;
+    document.querySelectorAll('[data-join]').forEach((b) => b.onclick = act(async () => {
+      const password = b.dataset.locked === 'true' ? (prompt('Room password') || '') : '';
+      await api('/api/join', { name: b.dataset.join, password }); loadRooms();
+    }, 'Joined! Open your game.'));
+  } catch (e) { $('#rooms').innerHTML = `<div class="empty">⚠ ${esc(e.message)}</div>`; }
+}
+$('#rGo').onclick = act(async () => {
+  if (!selGame) throw new Error('Pick a game first');
+  await api('/api/create', { name: $('#rName').value.trim(), password: $('#rPw').value, public: true, game: selGame });
+  $('#rName').value = ''; $('#rPw').value = ''; loadRooms();
+}, 'Room created!');
+
+// ---------- servers ----------
+let hostKey = '';
+function renderServers(s) {
+  $('#srvUrl').textContent = s.server || '—';
+  const key = JSON.stringify([s.hosting, s.hostInfo, s.canSwitch, s.platform]);
+  if (key !== hostKey) {
+    hostKey = key;
+    const box = $('#hostBox');
+    const device = s.platform === 'android' ? 'phone' : 'PC';
+    if (s.platform === 'android' && !s.hosting) {
+      box.innerHTML = `<button class="btn danger" id="disc" style="width:100%">Disconnect</button>
+        <div class="dim" style="font-size:12px;margin-top:10px">To host on this phone instead: Disconnect, then tap “Host the server on this phone”.</div>`;
+      $('#disc').onclick = () => NATIVE.disconnect();
+    } else if (s.hosting) {
+      const h = s.hostInfo || { lan: [] };
+      box.innerHTML = `<div class="chip direct" style="margin-bottom:10px"><span class="dot"></span>This ${device} is the server</div>
+        <div class="muted" style="font-size:13px">Give friends one of these addresses:</div>
+        ${h.lan.map((ip) => `<div class="addr"><span class="mono">${esc(ip)}</span><span class="dim" style="font-size:12px">same Wi-Fi</span><button class="icon-btn" data-copy="${esc(ip)}">⧉</button></div>`).join('')}
+        ${h.publicIp ? `<div class="addr"><span class="mono">${esc(h.publicIp)}</span><span class="dim" style="font-size:12px">internet*</span><button class="icon-btn" data-copy="${esc(h.publicIp)}">⧉</button></div>
+        <div class="dim" style="font-size:12px;margin-top:8px">* after forwarding TCP ${h.httpPort} + UDP ${h.udpPort} on your router to this PC. Share it privately.</div>` : ''}
+        ${h.phone ? `<div class="tip" style="margin-top:12px">📶 Friends must be on the <b>same Wi-Fi</b> or on <b>this phone's hotspot</b>. Keep MiniLAN open; the server stops when you disconnect.</div>` : ''}
+        ${s.canSwitch ? `<h3 class="section">Join another server instead</h3><div class="row"><input id="joinAddr" placeholder="Server address"><button class="btn ghost" id="bJoinSrv">Switch</button></div>` : ''}
+        ${s.platform === 'android' ? `<button class="btn danger" id="disc" style="width:100%;margin-top:14px">Stop hosting</button>` : ''}`;
+      $('#disc') && ($('#disc').onclick = () => NATIVE.disconnect());
+    } else {
+      box.innerHTML = s.canSwitch ? `
+        <button class="btn primary" id="bHostHere" style="width:100%">🏠 Host the server on this PC</button>
+        <div class="dim" style="font-size:12px;margin:8px 0 0">Free: your PC becomes the server for you and your friends. Keep MiniLAN open while they play.</div>
+        <h3 class="section">Or switch server</h3>
+        <div class="row"><input id="joinAddr" placeholder="Server address"><button class="btn ghost" id="bJoinSrv">Switch</button></div>`
+        : '<div class="dim" style="font-size:13px">Start MiniLAN with MiniLAN.bat to switch between hosting and joining.</div>';
+    }
+    const restart = async (body) => {
+      try { await api('/api/mode', body); toast('Restarting MiniLAN…'); hostKey = ''; setTimeout(() => location.reload(), 4500); } catch (e) { toast('⚠ ' + e.message); }
+    };
+    $('#bHostHere') && ($('#bHostHere').onclick = () => restart({ mode: 'host' }));
+    $('#bJoinSrv') && ($('#bJoinSrv').onclick = () => restart({ mode: 'join', server: $('#joinAddr').value }));
+    document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => copy(b.dataset.copy));
+  }
+  const bars = (ms, on) => `<span class="bars ${!on ? '' : ms < 60 ? 'b3' : ms < 150 ? 'b2' : 'b1'}"><i></i><i></i><i></i></span>`;
+  $('#relays').innerHTML = s.relays.map((r) => `<div class="relay" data-relay="${esc(r.name)}" style="cursor:pointer">
+      <div><div style="font-weight:650">${esc(r.name)} ${r.region ? `<span class="badge">${esc(r.region)}</span>` : ''}</div><div class="sub dim mono" style="font-size:12px">${esc(r.endpoint)}</div></div>
+      <span class="ping ${pingCls(r.online ? r.rtt : null)}">${r.online && r.rtt != null ? r.rtt + ' ms' : 'offline'} ${bars(r.rtt, r.online)}</span>
+      ${r.selected ? '<span class="chip direct"><span class="dot"></span>In use</span>' : '<span class="chip off">Standby</span>'}</div>`).join('')
+    || '<div class="empty dim">No relays.</div>';
+  document.querySelectorAll('[data-relay]').forEach((b) => b.onclick = act(() => api('/api/relay', { name: b.dataset.relay }), 'Relay pinned'));
+}
+
+// ---------- connect screen (Android) ----------
+$('#cGo').onclick = () => {
+  const server = $('#cServer').value.trim(), name = $('#cName').value.trim();
+  if (!server) { $('#cErr').textContent = 'Enter the server address'; return; }
+  $('#cErr').textContent = ''; $('#cGo').textContent = 'Connecting…';
+  NATIVE.connect(server, name);
+};
+if (NATIVE && typeof NATIVE.host === 'function') {
+  $('#hostOpt').style.display = '';
+  $('#cHost').onclick = () => { $('#cErr').textContent = ''; $('#cHost').textContent = 'Starting server…'; NATIVE.host($('#cName').value.trim()); };
+}
+const HOWTO = 'https://github.com/Uss15/minilan-vpn/blob/main/HOSTING.md';
+document.querySelectorAll('.howto').forEach((a) => a.onclick = (e) => { e.preventDefault(); NATIVE ? NATIVE.openUrl(HOWTO) : window.open(HOWTO, '_blank', 'noopener'); });
+let connectFilled = false;
+function renderConnect(s) {
+  if (!connectFilled) { $('#cServer').value = s.server || ''; $('#cName').value = s.name || ''; connectFilled = true; }
+  $('#cErr').textContent = s.error ? '⚠ ' + s.error : '';
+  $('#cGo').textContent = s.connecting ? 'Connecting…' : 'Connect';
+  if (!s.connecting && $('#cHost')) $('#cHost').textContent = '📶 Host the server on this phone';
+}
+
+// ---------- main loop ----------
+function render(s) {
+  const wasConnected = st?.connected;
+  st = s;
+  const connected = s.connected !== false;
+  $('#connect').classList.toggle('on', !connected);
+  $('#app').style.display = connected ? '' : 'none';
+  $('#tabs').style.visibility = connected ? '' : 'hidden';
+  if (!connected) {
+    $('#statusPill').innerHTML = '<span class="dot" style="background:var(--dim)"></span><span>Offline</span>';
+    renderConnect(s); return;
+  }
+  connectFilled = false;
+  const onlinePeers = s.peers.filter((p) => p.online).length;
+  $('#statusPill').innerHTML = `<span class="dot on" style="background:var(--ok)"></span><span>Online · <span class="mono">${esc(s.self.ip)}</span></span>`;
+  $('#myIp').textContent = s.self.ip;
+  $('#myName').textContent = `${s.self.name} · ${s.platform === 'android' ? 'Phone' : 'PC'}${s.hosting ? ' · hosting the server' : ''}`;
+  $('#myPub').textContent = s.self.publicEndpoint || '—';
+  const sel = s.relays.find((r) => r.selected);
+  $('#myRelay').textContent = sel ? `${sel.name}${sel.rtt != null ? ' · ' + sel.rtt + ' ms' : ''}` : '—';
+  $('#myPeers').textContent = onlinePeers;
+  renderNetworks(s);
+  renderServers(s);
+  if (!wasConnected && selGame) loadRooms();
+}
+
+async function refresh() {
+  try { render(await api('/api/status')); } catch { /* daemon restarting */ }
+  if (!Object.keys(games).length && st?.connected !== false) {
+    try { games = await api('/api/games'); selGame ||= Object.keys(games).find((k) => !k.startsWith('_')); renderGameGrid(); } catch { /* not yet */ }
+  }
+}
+refresh();
+setInterval(refresh, 1500);
+setInterval(() => { if ($('#v-games').classList.contains('on')) loadRooms(); }, 8000);
+</script>
+</body>
+</html>

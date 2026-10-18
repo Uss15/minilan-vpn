@@ -26,6 +26,24 @@ class MiniLanVpnService : VpnService() {
             private set
         @Volatile var lastError: String? = null
         @Volatile var connecting = false
+        /** Set while this phone hosts the MiniLAN server (Wi-Fi / hotspot). */
+        @Volatile var hosted: MiniServer? = null
+            private set
+        @Volatile var hostAddresses: List<String> = emptyList()
+            private set
+
+        /** Addresses other devices on the same Wi-Fi or on this phone's hotspot can reach (no mobile-data interfaces). */
+        fun lanAddresses(): List<String> = java.net.NetworkInterface.getNetworkInterfaces().toList()
+            .filter { it.isUp && !it.isLoopback && !Regex("^(rmnet|ccmni|pdp|tun|ppp|dummy|v4-)").containsMatchIn(it.name) }
+            .flatMap { it.inetAddresses.toList() }
+            .filterIsInstance<java.net.Inet4Address>()
+            .map { it.hostAddress!! }
+            .filter { !it.startsWith("100.77.") }
+
+        fun hostInfo(): org.json.JSONObject? = hosted?.let {
+            org.json.JSONObject().put("lan", org.json.JSONArray(hostAddresses)).put("publicIp", org.json.JSONObject.NULL)
+                .put("httpPort", it.boundHttpPort).put("udpPort", it.boundUdpPort).put("phone", true)
+        }
 
         fun loadIdentity(ctx: Context, server: String): Identity {
             val p = ctx.getSharedPreferences("id:$server", Context.MODE_PRIVATE)
@@ -49,10 +67,11 @@ class MiniLanVpnService : VpnService() {
         when (intent?.action) {
             ACTION_DISCONNECT -> { disconnect(); stopSelf(); return START_NOT_STICKY }
             ACTION_CONNECT -> {
-                val server = intent.getStringExtra("server") ?: return START_NOT_STICKY
+                val host = intent.getBooleanExtra("host", false)
+                val server = intent.getStringExtra("server") ?: if (host) "" else return START_NOT_STICKY
                 val name = intent.getStringExtra("name") ?: Build.MODEL
-                goForeground("Connecting…")
-                connect(server, name)
+                goForeground(if (host) "Starting server…" else "Connecting…")
+                connect(server, name, host)
             }
         }
         return START_STICKY
@@ -73,12 +92,22 @@ class MiniLanVpnService : VpnService() {
         else startForeground(1, n)
     }
 
-    private fun connect(server: String, name: String) {
+    private fun connect(serverArg: String, name: String, host: Boolean) {
         if (engine != null || connecting) return
         connecting = true
         lastError = null
         Thread({
             try {
+                var server = serverArg
+                if (host) {
+                    // Host the coordinator on this phone, then join it over our own Wi-Fi/hotspot address.
+                    val lan = lanAddresses()
+                    if (lan.isEmpty()) throw IllegalStateException("Turn on Wi-Fi or your hotspot to host")
+                    val games = org.json.JSONObject(assets.open("games.json").bufferedReader().use { it.readText() })
+                    hosted = MiniServer(java.io.File(filesDir, "server-data.json"), games, 8080, 8081, "0.0.0.0") { Log.i("MiniLAN", it) }.start()
+                    hostAddresses = lan
+                    server = "http://${lan.first()}:8080"
+                }
                 val identity = loadIdentity(this, server)
                 val e = Engine(server, name, identity, { saveIdentity(this, server, it) }, { protect(it) })
                 val ip = e.register()
@@ -98,7 +127,7 @@ class MiniLanVpnService : VpnService() {
                 running = true
                 e.start(FileOutputStream(pfd.fileDescriptor))
                 engine = e
-                goForeground("Connected as $ip")
+                goForeground(if (host) "Hosting on ${hostAddresses.first()} · you are $ip" else "Connected as $ip")
                 readTun(pfd, e)
             } catch (ex: Exception) {
                 Log.e("MiniLAN", "connect failed", ex)
@@ -126,6 +155,9 @@ class MiniLanVpnService : VpnService() {
         running = false
         engine?.stop()
         engine = null
+        hosted?.stop()
+        hosted = null
+        hostAddresses = emptyList()
         runCatching { tun?.close() }
         tun = null
         if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else @Suppress("DEPRECATION") stopForeground(true)

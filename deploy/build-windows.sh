@@ -17,6 +17,7 @@ rm -rf "$OUT/app/node_modules/koffi/vendor" "$OUT/app/node_modules/koffi/doc"
 cp -r node_modules/@koromix/koffi-win32-x64 "$OUT/app/node_modules/@koromix/"
 test -f "$OUT/app/client/tun/wintun.dll" || { echo "missing client/tun/wintun.dll"; exit 1; }
 [ -f default-server.txt ] && cp default-server.txt "$OUT/default-server.txt"
+cp HOSTING.md "$OUT/HOW TO HOST.md"
 
 # Launchers (CRLF). Self-elevate: creating the network adapter needs Administrator.
 crlf() { sed 's/$/\r/'; }
@@ -58,6 +59,7 @@ MiniLAN ${VERSION} for Windows (x64)
 3. Your browser opens http://127.0.0.1:7777: create/join a network or a game room.
    Keep the black window open while playing; close it to disconnect.
 
+Hosting: see "HOW TO HOST.md" (PC, phone hotspot or VPS; port forwarding steps).
 Hosting for friends over the Internet: forward TCP 8080 + UDP 8081 on your router to this PC.
 Change name/server later: "MiniLAN settings.bat".
 Generals / Zero Hour: Options -> IP Address -> pick your 100.77.x.x address, then Network.

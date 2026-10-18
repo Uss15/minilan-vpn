@@ -82,12 +82,13 @@ private class Relay(val name: String, val region: String, val ep: Endpoint, val 
 
 class Engine(
     serverUrl: String,
-    private val name: String,
+    val name: String,
     private val identity: Identity,
     private val saveIdentity: (Identity) -> Unit,
     private val protect: (DatagramSocket) -> Unit,
 ) {
-    private val server = serverUrl.trimEnd('/')
+    val server = serverUrl.trimEnd('/')
+    private val pendingPings = java.util.concurrent.ConcurrentHashMap<Long, java.util.concurrent.CompletableFuture<Long>>()
     private val lock = Object()
     private lateinit var keys: KeyPair
     var id = 0; private set
@@ -270,6 +271,37 @@ class Engine(
         }, bestRelay().let { "${it.name} ${it.rtt ?: "?"} ms" })
     }
 
+    /** Round-trip time to a peer through the tunnel (blocking, call off the main thread). */
+    fun ping(peerId: Int, timeoutMs: Long = 3000): Long {
+        val ts = System.currentTimeMillis() * 1000 + (Math.random() * 1000).toLong()
+        val f = java.util.concurrent.CompletableFuture<Long>()
+        synchronized(lock) {
+            val peer = peers[peerId] ?: throw ApiException(404, "unknown peer")
+            if (peer.cur == null) throw ApiException(409, "no session")
+            pendingPings[ts] = f
+            sendData(peer, Proto.encodeCtrl(Ctrl.PING, ts))
+        }
+        return try { f.get(timeoutMs, TimeUnit.MILLISECONDS) } catch (e: Exception) { pendingPings.remove(ts); throw ApiException(504, "timeout") }
+    }
+
+    /** Same JSON shape as the desktop client's /api/status, so the shared web UI works unchanged. */
+    fun statusJson(): JSONObject = synchronized(lock) {
+        val best = bestRelay()
+        JSONObject()
+            .put("self", JSONObject().put("id", id).put("name", name).put("ip", ip)
+                .put("port", if (::sock.isInitialized) sock.localPort else 0).put("publicEndpoint", publicEndpoint ?: JSONObject.NULL))
+            .put("networks", JSONArray(networks.toString()))
+            .put("peers", JSONArray(peers.values.map {
+                val path = when { it.cur == null -> "none"; it.pathRelay -> "relay"; it.path != null -> "direct ${it.path}"; else -> "none" }
+                JSONObject().put("id", it.id).put("name", it.name).put("ip", it.ip).put("online", it.online)
+                    .put("trusted", it.fwUdp == null).put("path", path).put("rtt", it.rtt ?: JSONObject.NULL)
+            }))
+            .put("relays", JSONArray(relays.values.map {
+                JSONObject().put("name", it.name).put("region", it.region).put("endpoint", it.ep.key)
+                    .put("rtt", it.rtt ?: JSONObject.NULL).put("online", it.fresh()).put("selected", it === best)
+            }))
+    }
+
     // ---------- UDP ----------
 
     private fun sendRaw(b: ByteArray, ep: Endpoint) {
@@ -386,7 +418,11 @@ class Engine(
                     val kind = pt[1].toInt()
                     val ts = ByteBuffer.wrap(pt).getLong(2)
                     if (kind == Ctrl.PING) sendData(peer, Proto.encodeCtrl(Ctrl.PONG, ts), from, from == null)
-                    else if (kind == Ctrl.PONG) peer.rtt = System.currentTimeMillis() - ts / 1000
+                    else if (kind == Ctrl.PONG) {
+                        val rtt = System.currentTimeMillis() - ts / 1000
+                        peer.rtt = rtt
+                        pendingPings.remove(ts)?.complete(rtt)
+                    }
                     return
                 }
                 if ((pt[0].toInt() ushr 4) != 4 || pt.size < 20) return

@@ -5,6 +5,7 @@ package com.minilan
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
@@ -64,6 +65,35 @@ class InteropTest {
             assertEquals(Proto.ipToInt(peer.ip), bb.getInt(12))     // from the PC
             assertEquals(7, bb.getShort(26).toInt())                // our sequence number
             println("interop OK: phone $myIp <-> pc ${peer.ip} via ${peer.path}")
+
+            // The in-app API server must expose the same shape the shared web UI expects.
+            val api = LocalApi({ File("../../client/web/index.html").inputStream() }, { JSONObject() }, { e }).start()
+            fun call(path: String, token: String?, body: String? = null): Pair<Int, String> {
+                val c = java.net.URL("http://127.0.0.1:${api.port}$path").openConnection() as java.net.HttpURLConnection
+                token?.let { c.setRequestProperty("x-minilan", it) }
+                if (body != null) { c.requestMethod = "POST"; c.doOutput = true; c.outputStream.use { it.write(body.toByteArray()) } }
+                val code = c.responseCode
+                return code to ((if (code < 400) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: "")
+            }
+            assertEquals(403, call("/api/status", null).first)
+            assertEquals(403, call("/api/status", "wrong-token").first)
+            val page = call("/", null)
+            assertEquals(200, page.first)
+            assertTrue(page.second.contains("MiniLANAndroid"))
+            val st = JSONObject(call("/api/status", api.token).second)
+            assertTrue(st.getBoolean("connected"))
+            assertEquals("android", st.getString("platform"))
+            assertEquals(myIp, st.getJSONObject("self").getString("ip"))
+            assertEquals(peer.ip, st.getJSONArray("peers").getJSONObject(0).getString("ip"))
+            assertTrue(st.getJSONArray("relays").getJSONObject(0).getBoolean("selected"))
+            assertEquals(1, st.getJSONArray("networks").length())
+            val ping = call("/api/ping", api.token, JSONObject().put("id", peer.id.toString()).toString())
+            assertEquals(200, ping.first)
+            val rtt = JSONObject(ping.second).getLong("rtt")
+            assertTrue(rtt >= 0)
+            assertEquals(400, call("/api/mode", api.token, JSONObject().put("mode", "host").toString()).first)
+            println("local API OK: status + ping $rtt ms")
+            api.stop()
             e.stop()
         } finally {
             proc.outputStream.close()
