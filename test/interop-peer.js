@@ -12,5 +12,9 @@ await pc.start();
 await pc.createNetwork('interop', 'secret123');
 process.stdout.write(JSON.stringify({ server: url, pcIp: pc.ip, pcId: pc.id }) + '\n');
 
-process.stdin.resume();
+// Commands on stdin: "bcast" sends a Generals-style LAN lobby broadcast (UDP 8086) into the network.
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (d) => {
+  if (d.includes('bcast')) pc.tun.sendUdp('255.255.255.255', 8086, 8086, Buffer.from('generals lobby'));
+});
 process.stdin.on('end', async () => { await pc.stop(); server.close(); process.exit(0); });

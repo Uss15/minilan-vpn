@@ -524,9 +524,32 @@ class Engine(
                 val src = ByteBuffer.wrap(pt).getInt(12)
                 if (src != peer.ipInt) return
                 if (!allowedInbound(peer, pt)) return
-                runCatching { tunOut?.write(pt) }
+                runCatching { tunOut?.write(unicastBroadcast(pt)) }
             }
         }
+    }
+
+    /**
+     * Games running under Wine on Android (e.g. C&C Generals in Winlator) bind their UDP socket to our 100.77 address,
+     * and Linux doesn't deliver broadcasts to sockets bound to a unicast address. Re-address incoming LAN broadcasts
+     * (255.255.255.255 or 100.77.255.255) to our own IP so the game receives the lobby announcements.
+     */
+    internal fun unicastBroadcast(pkt: ByteArray): ByteArray {
+        if (pkt.size < 28 || (pkt[9].toInt() and 0xff) != 17) return pkt
+        val bb = ByteBuffer.wrap(pkt)
+        val dst = bb.getInt(16)
+        if (dst != -1 && dst != Proto.BROADCAST) return pkt
+        val out = pkt.copyOf()
+        val ob = ByteBuffer.wrap(out)
+        val ihl = (out[0].toInt() and 15) * 4
+        ob.putInt(16, Proto.ipToInt(ip))
+        ob.putShort(10, 0)
+        var sum = 0
+        for (i in 0 until ihl step 2) sum += ob.getShort(i).toInt() and 0xffff
+        while (sum shr 16 != 0) sum = (sum and 0xffff) + (sum shr 16)
+        ob.putShort(10, sum.inv().toShort())
+        ob.putShort(ihl + 6, 0) // UDP checksum is optional over IPv4; 0 = not computed
+        return out
     }
 
     private fun allowedInbound(peer: Peer, pkt: ByteArray): Boolean {
