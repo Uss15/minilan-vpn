@@ -46,10 +46,12 @@ class MainActivity : Activity() {
                     .put("server", p.getString("server", app.getString(R.string.default_server)))
                     .put("name", p.getString("name", Build.MODEL))
                     .put("connecting", MiniLanVpnService.connecting)
+                    .put("defaultServer", app.getString(R.string.default_server))
                     .put("error", MiniLanVpnService.lastError ?: JSONObject.NULL)
             },
             engine = { MiniLanVpnService.engine },
             hostInfo = { MiniLanVpnService.hostInfo() },
+            defaultServer = app.getString(R.string.default_server),
         ).start().also { api = it }
 
         web = WebView(this).apply {

@@ -23,6 +23,10 @@ let serverUrl = arg('server', null);
 let hosted = null;
 let hostInfo = null; // addresses friends should use when this PC hosts
 const configPath = arg('config', null); // launcher's config.json (enables switching host/join from the UI)
+// The release's built-in online server (default-server.txt next to MiniLAN.bat, or the repo root in development).
+const defaultServer = ['../../default-server.txt', '../default-server.txt']
+  .map((p) => new URL(p, import.meta.url)).find((u) => fs.existsSync(u));
+const DEFAULT_SERVER = defaultServer ? fs.readFileSync(defaultServer, 'utf8').trim() : null;
 if (flag('host')) {
   const httpPort = Number(arg('host-http', 8080));
   const udpPort = Number(arg('host-udp', 8081));
@@ -82,7 +86,7 @@ http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/api/status') {
       return send(200, {
         ...engine.status(), connected: true, platform: 'pc',
-        server: serverUrl, hosting: !!hosted, hostInfo, canSwitch: !!configPath, tun: tunKind,
+        server: serverUrl, hosting: !!hosted, hostInfo, canSwitch: !!configPath, tun: tunKind, defaultServer: DEFAULT_SERVER,
       });
     }
     if (req.method === 'GET' && req.url === '/api/games') return send(200, games);

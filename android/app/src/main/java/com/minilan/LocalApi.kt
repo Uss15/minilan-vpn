@@ -18,6 +18,7 @@ class LocalApi(
     private val engine: () -> Engine?,
     /** Non-null while this phone hosts the server: addresses and ports for friends. */
     private val hostInfo: () -> JSONObject? = { null },
+    private val defaultServer: String = "",
 ) {
     val token: String = ByteArray(24).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
     private val server = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
@@ -61,6 +62,7 @@ class LocalApi(
             val host = hostInfo()
             return e.statusJson().put("connected", true).put("platform", "android").put("server", e.server)
                 .put("hosting", host != null).put("hostInfo", host ?: JSONObject.NULL).put("canSwitch", false)
+                .put("defaultServer", defaultServer)
         }
         e ?: throw ApiException(409, "Not connected")
         if (req.method == "GET") return when (req.path) {

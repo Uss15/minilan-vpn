@@ -212,6 +212,7 @@
     </div>
     <div class="err" id="cErr"></div>
     <button class="btn primary" id="cGo" style="width:100%;padding:14px">Connect</button>
+    <button class="btn ghost" id="cOnline" style="width:100%;padding:12px;margin-top:10px;display:none">🌍 Use MiniLAN online server</button>
     <div id="hostOpt" style="display:none">
       <div class="dim" style="margin:16px 0 10px;font-size:12px;letter-spacing:1px">— OR —</div>
       <button class="btn ghost" id="cHost" style="width:100%;padding:13px">📶 Host the server on this phone</button>
@@ -426,7 +427,7 @@ $('#rGo').onclick = act(async () => {
 let hostKey = '';
 function renderServers(s) {
   $('#srvUrl').textContent = s.server || '—';
-  const key = JSON.stringify([s.hosting, s.hostInfo, s.canSwitch, s.platform]);
+  const key = JSON.stringify([s.hosting, s.hostInfo, s.canSwitch, s.platform, s.server, s.defaultServer]);
   if (key !== hostKey) {
     hostKey = key;
     const box = $('#hostBox');
@@ -453,6 +454,15 @@ function renderServers(s) {
         <h3 class="section">Or switch server</h3>
         <div class="row"><input id="joinAddr" placeholder="Server address"><button class="btn ghost" id="bJoinSrv">Switch</button></div>`
         : '<div class="dim" style="font-size:13px">Start MiniLAN with MiniLAN.bat to switch between hosting and joining.</div>';
+    }
+    if (s.defaultServer && !sameServer(s.server, s.defaultServer)) {
+      const b = document.createElement('div');
+      b.innerHTML = `<button class="btn primary" id="bOnline" style="width:100%;margin-top:14px">🌍 Use MiniLAN online server</button>
+        <div class="dim" style="font-size:12px;margin-top:6px">Play with anyone over the Internet, with no hosting or port forwarding.</div>`;
+      box.appendChild(b);
+      $('#bOnline').onclick = s.platform === 'android'
+        ? () => { toast('Disconnecting… then tap Connect'); preferDefault = true; connectFilled = false; NATIVE.disconnect(); }
+        : () => restart({ mode: 'join', server: s.defaultServer });
     }
     const restart = async (body) => {
       try { await api('/api/mode', body); toast('Restarting MiniLAN…'); hostKey = ''; setTimeout(() => location.reload(), 4500); } catch (e) { toast('⚠ ' + e.message); }
@@ -484,8 +494,15 @@ if (NATIVE && typeof NATIVE.host === 'function') {
 const HOWTO = 'https://github.com/Uss15/minilan-vpn/blob/main/HOSTING.md';
 document.querySelectorAll('.howto').forEach((a) => a.onclick = (e) => { e.preventDefault(); NATIVE ? NATIVE.openUrl(HOWTO) : window.open(HOWTO, '_blank', 'noopener'); });
 let connectFilled = false;
+let preferDefault = false;
+const sameServer = (a, b) => String(a || '').replace(/\/$/, '').toLowerCase() === String(b || '').replace(/\/$/, '').toLowerCase();
+$('#cOnline').onclick = () => { $('#cServer').value = st.defaultServer; $('#cGo').click(); };
 function renderConnect(s) {
-  if (!connectFilled) { $('#cServer').value = s.server || ''; $('#cName').value = s.name || ''; connectFilled = true; }
+  if (!connectFilled) {
+    $('#cServer').value = (preferDefault && s.defaultServer) || s.server || s.defaultServer || '';
+    $('#cName').value = s.name || ''; connectFilled = true; preferDefault = false;
+  }
+  $('#cOnline').style.display = s.defaultServer && !sameServer($('#cServer').value, s.defaultServer) ? '' : 'none';
   $('#cErr').textContent = s.error ? '⚠ ' + s.error : '';
   $('#cGo').textContent = s.connecting ? 'Connecting…' : 'Connect';
   if (!s.connecting && $('#cHost')) $('#cHost').textContent = '📶 Host the server on this phone';
