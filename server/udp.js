@@ -8,8 +8,9 @@ export const ONLINE_MS = 45_000;
 // Key a standalone relay derives for a node, so it can check UDP_REG without a database.
 export const relayKeyFor = (secret, id) => crypto.createHmac('sha256', secret).update(`minilan-relay:${id}`).digest('hex');
 
-// regKey(id) -> mac key string or null; canRelay(src, dst) -> bool; onChange() when a node's address/online state changes.
-export function createUdpCore({ regKey, canRelay, onChange = () => {} }) {
+// regKey(id) -> mac key string or null; canRelay(src, dst) -> bool; onChange() when a node's address/online state changes;
+// relayElsewhere(dst, packet) -> bool delivers a relay packet another way (WebSocket) when dst has no fresh UDP address.
+export function createUdpCore({ regKey, canRelay, onChange = () => {}, relayElsewhere = () => false }) {
   const live = new Map(); // id -> { addr, port, lastSeen, lastTs }
   const sock = dgram.createSocket('udp4');
   const isOnline = (id) => { const l = live.get(id); return !!l && Date.now() - l.lastSeen < ONLINE_MS; };
@@ -42,8 +43,9 @@ export function createUdpCore({ regKey, canRelay, onChange = () => {} }) {
       const ls = live.get(src);
       const ld = live.get(dst);
       if (!ls || ls.addr !== rinfo.address || ls.port !== rinfo.port) return; // anti-spoof
-      if (!ld || !isOnline(dst) || !canRelay(src, dst)) return;
-      sock.send(msg, ld.port, ld.addr);
+      if (!canRelay(src, dst)) return;
+      if (ld && isOnline(dst)) sock.send(msg, ld.port, ld.addr);
+      else relayElsewhere(dst, msg);
     }
   });
 

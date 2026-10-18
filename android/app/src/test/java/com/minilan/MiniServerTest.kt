@@ -42,8 +42,8 @@ class MiniServerTest {
         val srv = MiniServer(null, games, httpPort = 0, udpPort = 0, bind = "127.0.0.1").start()
         try {
             val url = "http://127.0.0.1:${srv.boundHttpPort}"
-            val a = Engine(url, "phone-a", Identity(null, null, 0, null), {}, {})
-            val b = Engine(url, "phone-b", Identity(null, null, 0, null), {}, {})
+            val a = Engine(url, "phone-a", Identity(null, null, 0, null), {}, {}, stunServers = emptyList())
+            val b = Engine(url, "phone-b", Identity(null, null, 0, null), {}, {}, stunServers = emptyList())
             a.register(); b.register()
             a.createNetwork("hotspot", "secret123")
             b.joinNetwork("hotspot", "secret123")

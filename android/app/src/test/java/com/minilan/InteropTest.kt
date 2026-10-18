@@ -46,7 +46,7 @@ class InteropTest {
         try {
             val info = JSONObject(proc.inputStream.bufferedReader().readLine())
             val sink = PacketSink()
-            val e = Engine(info.getString("server"), "phone", Identity(null, null, 0, null), {}, {})
+            val e = Engine(info.getString("server"), "phone", Identity(null, null, 0, null), {}, {}, stunServers = emptyList())
             val myIp = e.register()
             e.joinNetwork("interop", "secret123")
             e.start(sink)

@@ -11,6 +11,7 @@ import {
   ipToInt, intToIp, BROADCAST, inSubnet,
 } from '../shared/proto.js';
 import { parseIPv4 } from './ip.js';
+import { DEFAULT_STUN, stunRequest, isStun, parseStunResponse } from '../shared/stun.js';
 
 const GAMES = JSON.parse(fs.readFileSync(new URL('../shared/games.json', import.meta.url), 'utf8'));
 const LIMITED_BCAST = 0xffffffff;
@@ -21,6 +22,7 @@ const DIRECT_STALE_MS = 15_000;
 const KEEPALIVE_MS = 10_000;
 const PROBE_MS = 5_000;
 const REG_MS = 15_000;
+const STUN_MS = 60_000;
 
 function parsePorts(list) {
   return (list || []).map((r) => {
@@ -31,8 +33,19 @@ function parsePorts(list) {
 const portIn = (ranges, p) => ranges.some(([a, b]) => p >= a && p <= b);
 
 export class Engine extends EventEmitter {
-  constructor({ serverUrl, name, statePath = null, tun = null, port = 0, noDirect = false, localEndpoints = null, relayPrefer = null, log = () => {} }) {
+  constructor({
+    serverUrl, name, statePath = null, tun = null, port = 0, noDirect = false, localEndpoints = null, relayPrefer = null, log = () => {},
+    stunServers = DEFAULT_STUN, // learn our public UDP address even when the server is only reachable over HTTP
+    serverUdp = true, // false simulates a server whose UDP port is unreachable (e.g. behind an HTTP-only tunnel)
+  }) {
     super();
+    this.stunServers = stunServers;
+    this.serverUdp = serverUdp;
+    this.stunAddrs = new Map(); // "addr:port" of STUN servers we query
+    this.stunEndpoint = null;
+    this.ws = null; // Relay/TCP over WebSocket, used when UDP to every relay fails
+    this.wsOpen = false;
+    this.lastWsTry = 0;
     this.relayPrefer = relayPrefer; // pin a relay by name (e.g. a region), falls back to lowest RTT
     this.serverUrl = serverUrl.replace(/\/$/, '');
     this.name = name;
@@ -126,9 +139,12 @@ export class Engine extends EventEmitter {
       await this.tun.start({ ip: this.ip, prefix: 16 });
       this.tun.on('packet', (p) => this.fromTun(p));
     }
-    await this.api('POST', '/v1/endpoints', { local: this.localEndpoints() });
+    await this.reportEndpoints();
+    this.startedAt = Date.now();
     this.sendReg();
     this.regTimer = setInterval(() => this.sendReg(), REG_MS);
+    this.queryStun();
+    this.stunTimer = setInterval(() => this.queryStun(), STUN_MS);
     this.tickTimer = setInterval(() => this.tick(), 500);
     this.pollLoop();
     this.log(`up: #${this.id} ${this.ip} udp :${this.port}`);
@@ -140,8 +156,62 @@ export class Engine extends EventEmitter {
     this.abort?.abort();
     clearInterval(this.regTimer);
     clearInterval(this.tickTimer);
+    clearInterval(this.stunTimer);
+    this.ws?.close();
     await this.tun?.stop?.();
     this.udp?.close();
+  }
+
+  reportEndpoints() {
+    return this.api('POST', '/v1/endpoints', { local: this.localEndpoints(), public: this.stunEndpoint });
+  }
+
+  async queryStun() {
+    for (const s of this.stunServers) {
+      const m = /^(.+):(\d+)$/.exec(s);
+      if (!m) continue;
+      try {
+        const addr = (await dns.lookup(m[1], { family: 4 })).address;
+        this.stunAddrs.set(`${addr}:${m[2]}`, true);
+        this.sendRaw(stunRequest(), Number(m[2]), addr);
+      } catch { /* offline or DNS failure: try the next one */ }
+    }
+  }
+
+  onStun(msg) {
+    const r = parseStunResponse(msg);
+    if (!r) return;
+    const ep = `${r.addr}:${r.port}`;
+    if (ep === this.stunEndpoint) return;
+    this.stunEndpoint = ep;
+    this.publicEndpoint ||= ep;
+    this.reportEndpoints().catch(() => {});
+    this.emit('state', this.status());
+  }
+
+  // ---------- Relay/TCP (WebSocket) ----------
+
+  udpRelayOk() {
+    return [...this.relays.values()].some((r) => Date.now() - r.lastAck < 45_000 && r.rtt != null);
+  }
+
+  connectWs() {
+    if (this.ws || !this.running) return;
+    this.lastWsTry = Date.now();
+    const url = `${this.serverUrl.replace(/^http/, 'ws')}/v1/ws?token=${this.token}`;
+    const ws = new WebSocket(url);
+    ws.binaryType = 'arraybuffer';
+    this.ws = ws;
+    ws.onopen = () => { this.wsOpen = true; this.log('relay/tcp connected'); this.emit('state', this.status()); };
+    ws.onmessage = (ev) => {
+      const m = Buffer.from(ev.data);
+      if (m[0] === T.RELAY && m.length > 9 && m.readUInt32BE(5) === this.id) {
+        try { this.onPeerPacket(m.subarray(9), { relay: true, src: m.readUInt32BE(1) }); } catch (e) { this.log('ws packet error', e); }
+      }
+    };
+    const closed = () => { if (this.ws === ws) { this.ws = null; this.wsOpen = false; } };
+    ws.onclose = closed;
+    ws.onerror = closed;
   }
 
   localEndpoints() {
@@ -270,8 +340,11 @@ export class Engine extends EventEmitter {
       self: { id: this.id, name: this.name, ip: this.ip, port: this.port, publicEndpoint: this.publicEndpoint },
       relays: [...this.relays.values()].map((r) => ({
         name: r.name, region: r.region, endpoint: `${r.addr}:${r.port}`, rtt: r.rtt,
-        online: Date.now() - r.lastAck < 45_000, selected: r === this.bestRelay(),
-      })),
+        online: Date.now() - r.lastAck < 45_000, selected: this.udpRelayOk() && r === this.bestRelay(),
+      })).concat(this.ws ? [{
+        name: 'Relay/TCP', region: 'websocket', endpoint: new URL(this.serverUrl).host, rtt: null,
+        online: this.wsOpen, selected: this.wsOpen && !this.udpRelayOk(),
+      }] : []),
       networks: this.networks,
       peers: [...this.peers.values()].map((p) => ({
         id: p.id, name: p.name, ip: p.ip, online: p.online,
@@ -303,14 +376,17 @@ export class Engine extends EventEmitter {
   }
 
   sendReg() {
-    if (this.udp) for (const r of this.relays.values()) this.sendRegTo(r);
+    if (!this.udp) return;
+    for (const r of this.relays.values()) if (this.serverUdp || !r.builtin) this.sendRegTo(r);
   }
 
   sendVia(peer, pkt, path) {
     if (!path) return;
     if (path.relay) {
+      const wrapped = encodeRelay(this.id, peer.id, pkt);
+      if (!this.udpRelayOk() && this.wsOpen) { this.ws.send(wrapped); return; } // Relay/TCP
       const r = this.bestRelay();
-      this.sendRaw(encodeRelay(this.id, peer.id, pkt), r.port, r.addr);
+      this.sendRaw(wrapped, r.port, r.addr);
     } else {
       this.sendRaw(pkt, path.port, path.addr);
     }
@@ -328,6 +404,7 @@ export class Engine extends EventEmitter {
 
   onUdp(msg, rinfo) {
     if (!msg.length) return;
+    if (isStun(msg) && this.stunAddrs.has(`${rinfo.address}:${rinfo.port}`)) { this.onStun(msg); return; }
     const relay = this.relays.get(`${rinfo.address}:${rinfo.port}`);
     if (relay) {
       if (msg[0] === T.UDP_REG_ACK && msg.length === 7) {
@@ -443,6 +520,8 @@ export class Engine extends EventEmitter {
 
   tick() {
     const now = Date.now();
+    // No relay answered over UDP for a few seconds (UDP blocked or server behind an HTTP tunnel): use Relay/TCP.
+    if (!this.ws && !this.udpRelayOk() && now - (this.startedAt || now) > 2500 && now - this.lastWsTry > 3000) this.connectWs();
     for (const peer of this.peers.values()) {
       if (peer.cur && now - peer.lastRx > DEAD_MS) {
         peer.cur = peer.prev = null;

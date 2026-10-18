@@ -14,7 +14,7 @@ const waitFor = async (fn, ms = 10000) => {
 
 const mk = async (name) => {
   const tun = new VirtualTun();
-  const e = new Engine({ serverUrl: url, name, tun, localEndpoints: ['127.0.0.1'] });
+  const e = new Engine({ serverUrl: url, name, tun, localEndpoints: ['127.0.0.1'], stunServers: [] });
   await e.start();
   return { e, tun };
 };

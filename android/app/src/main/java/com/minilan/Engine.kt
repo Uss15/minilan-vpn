@@ -86,8 +86,27 @@ class Engine(
     private val identity: Identity,
     private val saveIdentity: (Identity) -> Unit,
     private val protect: (DatagramSocket) -> Unit,
+    /** Public STUN servers used to learn our public UDP address (works even when the server is HTTP-only). */
+    private val stunServers: List<String> = DEFAULT_STUN,
+    /** false simulates a server whose UDP port is unreachable (tests). */
+    private val serverUdp: Boolean = true,
+    /** Never try direct paths (tests). */
+    private val noDirect: Boolean = false,
+    /** Override the LAN endpoints we advertise, as "a.b.c.d" hosts (tests). */
+    private val localHosts: List<String>? = null,
 ) {
+    companion object {
+        val DEFAULT_STUN = listOf("stun.l.google.com:19302", "stun.cloudflare.com:3478")
+        const val STUN_COOKIE = 0x2112A442
+    }
+
     val server = serverUrl.trimEnd('/')
+    private val stunAddrs = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    @Volatile var stunEndpoint: String? = null; private set
+    @Volatile private var ws: WsClient? = null
+    @Volatile private var wsConnecting = false
+    private var lastWsTry = 0L
+    private var startedAt = 0L
     private val pendingPings = java.util.concurrent.ConcurrentHashMap<Long, java.util.concurrent.CompletableFuture<Long>>()
     private val lock = Object()
     private lateinit var keys: KeyPair
@@ -162,9 +181,10 @@ class Engine(
         running = true
         Thread(::recvLoop, "minilan-udp").start()
         Thread(::pollLoop, "minilan-poll").start()
-        val local = JSONArray(localEndpoints())
-        exec.execute { runCatching { api("POST", "/v1/endpoints", JSONObject().put("local", local)) } }
+        startedAt = System.currentTimeMillis()
+        exec.execute { reportEndpoints() }
         exec.scheduleAtFixedRate({ safe { sendReg() } }, 0, REG_MS, TimeUnit.MILLISECONDS)
+        exec.scheduleAtFixedRate({ safe { queryStun() } }, 0, 60_000, TimeUnit.MILLISECONDS)
         exec.scheduleAtFixedRate({ safe { tick() } }, 500, 500, TimeUnit.MILLISECONDS)
     }
 
@@ -172,6 +192,74 @@ class Engine(
         running = false
         exec.shutdownNow()
         runCatching { sock.close() }
+        ws?.close()
+    }
+
+    private fun reportEndpoints() {
+        runCatching { api("POST", "/v1/endpoints", JSONObject().put("local", JSONArray(localEndpoints())).put("public", stunEndpoint ?: JSONObject.NULL)) }
+    }
+
+    // ---------- STUN (RFC 5389): learn our public UDP address ----------
+
+    private fun queryStun() {
+        for (s in stunServers) {
+            val m = Regex("^(.+):(\\d+)$").find(s) ?: continue
+            val addr = runCatching { InetAddress.getByName(m.groupValues[1]) }.getOrNull() ?: continue
+            val ep = Endpoint(addr, m.groupValues[2].toInt())
+            stunAddrs.add(ep.key)
+            val req = ByteBuffer.allocate(20).putShort(1).putShort(0).putInt(STUN_COOKIE).put(ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }).array()
+            sendRaw(req, ep)
+        }
+    }
+
+    private fun onStun(msg: ByteArray) {
+        val bb = ByteBuffer.wrap(msg)
+        if (msg.size < 20 || bb.getShort(0).toInt() != 0x0101) return
+        var off = 20
+        val end = minOf(msg.size, 20 + (bb.getShort(2).toInt() and 0xffff))
+        while (off + 4 <= end) {
+            val type = bb.getShort(off).toInt() and 0xffff
+            val len = bb.getShort(off + 2).toInt() and 0xffff
+            if ((type == 0x0020 || type == 0x8020) && len >= 8 && msg[off + 5].toInt() == 1) {
+                val port = (bb.getShort(off + 6).toInt() and 0xffff) xor (STUN_COOKIE ushr 16)
+                val ipInt = bb.getInt(off + 8) xor STUN_COOKIE
+                val ep = "${Proto.intToIp(ipInt)}:$port"
+                if (ep != stunEndpoint) {
+                    stunEndpoint = ep
+                    if (publicEndpoint == null) publicEndpoint = ep
+                    exec.execute { reportEndpoints() }
+                }
+                return
+            }
+            off += 4 + len + ((4 - len % 4) % 4)
+        }
+    }
+
+    // ---------- Relay/TCP over WebSocket ----------
+
+    private fun udpRelayOk() = relays.values.any { it.fresh() }
+    private val wsOpen get() = ws?.open == true
+
+    private fun connectWs() {
+        if (ws != null || wsConnecting || !running) return
+        wsConnecting = true
+        lastWsTry = System.currentTimeMillis()
+        exec.execute {
+            try {
+                val url = server.replaceFirst(Regex("^http"), "ws") + "/v1/ws?token=$token"
+                ws = WsClient(url, { m ->
+                    if (m.size > 9 && (m[0].toInt() and 0xff) == T.RELAY && ByteBuffer.wrap(m).getInt(5) == id) {
+                        safe { synchronized(lock) { onPeerPacket(m.copyOfRange(9, m.size), null, ByteBuffer.wrap(m).getInt(1)) } }
+                    }
+                }, { ws = null }).connect()
+                Log.i(TAG, "relay/tcp connected")
+            } catch (e: Exception) {
+                Log.w(TAG, "relay/tcp failed: ${e.message}")
+                ws = null
+            } finally {
+                wsConnecting = false
+            }
+        }
     }
 
     private fun safe(f: () -> Unit) = try { f() } catch (e: Exception) { Log.w(TAG, "error", e) }
@@ -182,6 +270,7 @@ class Engine(
         .filterIsInstance<Inet4Address>()
         .map { it.hostAddress!! }
         .filter { !Proto.inSubnet(Proto.ipToInt(it)) }
+        .let { localHosts ?: it }
         .take(6)
         .map { "$it:${sock.localPort}" }
 
@@ -298,8 +387,9 @@ class Engine(
             }))
             .put("relays", JSONArray(relays.values.map {
                 JSONObject().put("name", it.name).put("region", it.region).put("endpoint", it.ep.key)
-                    .put("rtt", it.rtt ?: JSONObject.NULL).put("online", it.fresh()).put("selected", it === best)
-            }))
+                    .put("rtt", it.rtt ?: JSONObject.NULL).put("online", it.fresh()).put("selected", udpRelayOk() && it === best)
+            } + (if (ws != null || wsConnecting) listOf(JSONObject().put("name", "Relay/TCP").put("region", "websocket")
+                .put("endpoint", URL(server).host).put("rtt", JSONObject.NULL).put("online", wsOpen).put("selected", wsOpen && !udpRelayOk())) else emptyList())))
     }
 
     // ---------- UDP ----------
@@ -309,7 +399,7 @@ class Engine(
     }
 
     private fun sendRegTo(r: Relay) { r.sentAt = System.nanoTime(); sendRaw(Proto.encodeUdpReg(id, r.key), r.ep) }
-    private fun sendReg() = synchronized(lock) { relays.values.forEach(::sendRegTo) }
+    private fun sendReg() = synchronized(lock) { relays.values.filter { serverUdp || !it.builtin }.forEach(::sendRegTo) }
 
     private fun bestRelay(): Relay {
         relayPrefer?.let { want -> relays.values.firstOrNull { it.name == want && it.fresh() }?.let { return it } }
@@ -317,8 +407,12 @@ class Engine(
     }
 
     private fun sendVia(peer: Peer, pkt: ByteArray, ep: Endpoint?, relay: Boolean) {
-        if (relay) sendRaw(Proto.encodeRelay(id, peer.id, pkt), bestRelay().ep)
-        else if (ep != null) sendRaw(pkt, ep)
+        if (relay) {
+            val wrapped = Proto.encodeRelay(id, peer.id, pkt)
+            val w = ws
+            if (!udpRelayOk() && w != null && w.open) w.send(wrapped) // Relay/TCP
+            else sendRaw(wrapped, bestRelay().ep)
+        } else if (ep != null) sendRaw(pkt, ep)
     }
 
     private fun sendData(peer: Peer, payload: ByteArray, ep: Endpoint? = peer.path, relay: Boolean = peer.pathRelay): Boolean {
@@ -341,6 +435,7 @@ class Engine(
 
     private fun onUdp(msg: ByteArray, from: Endpoint) {
         if (msg.isEmpty()) return
+        if (msg.size >= 20 && ByteBuffer.wrap(msg).getInt(4) == STUN_COOKIE && from.key in stunAddrs) { onStun(msg); return }
         val relay = relays[from.key]
         if (relay != null) {
             val t = msg[0].toInt() and 0xff
@@ -463,11 +558,14 @@ class Engine(
 
     private fun tick() = synchronized(lock) {
         val now = System.currentTimeMillis()
+        // No relay answered over UDP (UDP blocked or the server sits behind an HTTP-only tunnel): use Relay/TCP.
+        if (ws == null && !udpRelayOk() && now - startedAt > 2500 && now - lastWsTry > 3000) connectWs()
         for (peer in peers.values) {
             if (peer.cur != null && now - peer.lastRx > DEAD_MS) {
                 peer.cur = null; peer.prev = null; peer.path = null; peer.pathRelay = false
             }
             if (!peer.online) continue
+            val direct = if (noDirect) emptyList() else peer.endpoints
             if (id < peer.id) {
                 val needHs = peer.cur == null || now - peer.cur!!.created > REKEY_MS
                 val p0 = peer.pending
@@ -483,18 +581,18 @@ class Engine(
                     if (peer.cur != null && (peer.path != null || peer.pathRelay)) {
                         sendVia(peer, pkt, peer.path, peer.pathRelay)
                     } else {
-                        peer.endpoints.forEach { sendRaw(pkt, it) }
+                        direct.forEach { sendRaw(pkt, it) }
                         if (p.attempts >= 3) sendVia(peer, pkt, null, true)
                     }
                 }
             } else if (peer.cur == null && now - peer.lastPunch >= 1000) {
                 peer.lastPunch = now
-                peer.endpoints.forEach { sendRaw(Proto.encodePunch(id), it) }
+                direct.forEach { sendRaw(Proto.encodePunch(id), it) }
             }
             if (peer.cur != null && now - peer.lastTx > KEEPALIVE_MS) sendData(peer, Proto.encodeCtrl(Ctrl.PING, now * 1000))
-            if (peer.cur != null && peer.pathRelay && peer.endpoints.isNotEmpty() && now - peer.lastProbe > PROBE_MS) {
+            if (peer.cur != null && peer.pathRelay && direct.isNotEmpty() && now - peer.lastProbe > PROBE_MS) {
                 peer.lastProbe = now
-                peer.endpoints.forEach { sendData(peer, Proto.encodeCtrl(Ctrl.PING, now * 1000), it, false) }
+                direct.forEach { sendData(peer, Proto.encodeCtrl(Ctrl.PING, now * 1000), it, false) }
             }
         }
     }

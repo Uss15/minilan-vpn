@@ -7,7 +7,7 @@ import { VirtualTun } from '../client/tun/virtual.js';
 const server = createServer({ httpPort: 0, udpPort: 0, host: '127.0.0.1', log: () => {} });
 const { httpPort } = await server.listen();
 const url = `http://127.0.0.1:${httpPort}`;
-const pc = new Engine({ serverUrl: url, name: 'pc', tun: new VirtualTun(), localEndpoints: ['127.0.0.1'] });
+const pc = new Engine({ serverUrl: url, name: 'pc', tun: new VirtualTun(), localEndpoints: ['127.0.0.1'], stunServers: [] });
 await pc.start();
 await pc.createNetwork('interop', 'secret123');
 process.stdout.write(JSON.stringify({ server: url, pcIp: pc.ip, pcId: pc.id }) + '\n');

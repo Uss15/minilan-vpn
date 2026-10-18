@@ -28,7 +28,7 @@ test('traffic flows through a standalone relay node', async () => {
 
   const mk = async (name) => {
     const tun = new VirtualTun();
-    const e = new Engine({ serverUrl: base, name, tun, noDirect: true, relayPrefer: 'eu-1' });
+    const e = new Engine({ serverUrl: base, name, tun, noDirect: true, relayPrefer: 'eu-1', stunServers: [] });
     await e.start();
     cleanup.push(() => e.stop());
     return { e, tun };

@@ -4,7 +4,9 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ipForIndex } from '../shared/proto.js';
-import { createUdpCore, relayKeyFor } from './udp.js';
+import { createUdpCore, relayKeyFor, ONLINE_MS } from './udp.js';
+import { acceptWebSocket } from './ws.js';
+import { T } from '../shared/proto.js';
 
 const GAMES = JSON.parse(fs.readFileSync(new URL('../shared/games.json', import.meta.url), 'utf8'));
 
@@ -26,6 +28,9 @@ export function createServer({
 
   // runtime-only state
   const localEps = new Map(); // id -> ["192.168.1.5:41000", ...]
+  const stunEps = new Map(); // id -> "203.0.113.5:41000" as discovered by the client via STUN
+  const wsConns = new Map(); // id -> WsConn (Relay/TCP path, also works through HTTP-only tunnels)
+  const seenHttp = new Map(); // id -> last state poll time (presence when UDP to us is blocked)
   const relays = new Map(); // name -> { name, region, endpoint, lastSeen }
   let version = 1;
   const waiters = new Set();
@@ -41,9 +46,21 @@ export function createServer({
     regKey: (id) => db.nodes[id]?.tokenHash ?? null, // clients key UDP_REG with hex sha256(token)
     canRelay: (a, b) => sharesNetwork(a, b),
     onChange: () => bump(),
+    relayElsewhere: (dst, pkt) => { const c = wsConns.get(dst); if (!c) return false; c.send(pkt); return true; },
   });
   const live = udp.live;
-  const isOnline = udp.isOnline;
+  // Online = reachable by UDP, or connected over WebSocket, or polling state (UDP to the server may be blocked).
+  const isOnline = (id) => udp.isOnline(id) || wsConns.has(id) || Date.now() - (seenHttp.get(id) || 0) < ONLINE_MS;
+
+  // Relay packet arriving over WebSocket from an authenticated node.
+  function relayFromWs(src, pkt) {
+    if (pkt.length <= 9 || pkt[0] !== T.RELAY || pkt.readUInt32BE(1) !== src) return;
+    const dst = pkt.readUInt32BE(5);
+    if (!sharesNetwork(src, dst)) return;
+    const ld = live.get(dst);
+    if (ld && udp.isOnline(dst)) udp.sock.send(pkt, ld.port, ld.addr);
+    else wsConns.get(dst)?.send(pkt);
+  }
 
   const liveRelays = () => [...relays.values()].filter((r) => Date.now() - r.lastSeen < RELAY_STALE_MS);
 
@@ -61,13 +78,13 @@ export function createServer({
     const peers = [...peerIds].map((pid) => {
       const p = db.nodes[pid];
       const pl = live.get(pid);
-      const pubEp = pl ? `${pl.addr}:${pl.port}` : null;
-      const endpoints = [...(pubEp ? [pubEp] : []), ...(localEps.get(pid) || []).filter((e) => e !== pubEp)];
+      const pubEp = pl && udp.isOnline(pid) ? `${pl.addr}:${pl.port}` : null;
+      const endpoints = [...new Set([pubEp, stunEps.get(pid), ...(localEps.get(pid) || [])].filter(Boolean))];
       return { id: p.id, name: p.name, ip: p.ip, pub: p.pub, online: isOnline(pid), endpoints };
     });
     return {
       version,
-      self: { id, ip: self.ip, name: self.name, publicEndpoint: l ? `${l.addr}:${l.port}` : null },
+      self: { id, ip: self.ip, name: self.name, publicEndpoint: l && udp.isOnline(id) ? `${l.addr}:${l.port}` : stunEps.get(id) || null },
       networks, peers,
       relays: liveRelays().map((r) => ({ name: r.name, region: r.region, endpoint: r.endpoint })),
       relayKey: relaySecret ? relayKeyFor(relaySecret, id) : null,
@@ -106,6 +123,7 @@ export function createServer({
       const local = (Array.isArray(body.local) ? body.local : [])
         .filter((e) => /^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/.test(e)).slice(0, 8);
       localEps.set(me.id, local);
+      if (typeof body.public === 'string' && /^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/.test(body.public)) stunEps.set(me.id, body.public);
       bump();
       return [200, { ok: true }];
     },
@@ -170,8 +188,11 @@ export function createServer({
         const me = auth(req);
         if (!me) return send(401, { error: 'unauthorized' });
         const since = Number(url.searchParams.get('since') || 0);
+        const wasOnline = isOnline(me.id);
+        seenHttp.set(me.id, Date.now());
+        if (!wasOnline) bump();
         if (version > since) return send(200, view(me.id));
-        const done = () => { clearTimeout(timer); waiters.delete(done); if (!res.writableEnded) send(200, view(me.id)); };
+        const done = () => { clearTimeout(timer); waiters.delete(done); seenHttp.set(me.id, Date.now()); if (!res.writableEnded) send(200, view(me.id)); };
         const timer = setTimeout(done, POLL_MS);
         waiters.add(done);
         req.on('close', () => { clearTimeout(timer); waiters.delete(done); });
@@ -238,10 +259,25 @@ export function createServer({
     }
   });
 
+  // Relay/TCP: GET /v1/ws?token=... upgrades to a WebSocket carrying RELAY packets.
+  httpServer.on('upgrade', (req, socket, head) => {
+    const url = new URL(req.url, 'http://x');
+    const token = url.searchParams.get('token') || '';
+    const me = url.pathname === '/v1/ws' && /^\w+$/.test(token) ? Object.values(db.nodes).find((n) => n.tokenHash === sha256(token)) : null;
+    if (!me) { socket.end('HTTP/1.1 401 Unauthorized\r\n\r\n'); return; }
+    const conn = acceptWebSocket(req, socket, head);
+    if (!conn) return;
+    wsConns.get(me.id)?.close();
+    wsConns.set(me.id, conn);
+    bump();
+    conn.on('message', (m) => relayFromWs(me.id, m));
+    conn.on('close', () => { if (wsConns.get(me.id) === conn) { wsConns.delete(me.id); bump(); } });
+  });
+
   // Online/offline transitions need a version bump so clients see them.
   let lastOnline = new Set();
   const sweeper = setInterval(() => {
-    const now = new Set([...live.keys()].filter(isOnline));
+    const now = new Set(Object.keys(db.nodes).map(Number).filter(isOnline));
     for (const [k, r] of relays) if (Date.now() - r.lastSeen > RELAY_STALE_MS) { relays.delete(k); bump(); }
     if (now.size !== lastOnline.size || [...now].some((id) => !lastOnline.has(id))) bump();
     lastOnline = now;
@@ -257,6 +293,7 @@ export function createServer({
     },
     close() {
       clearInterval(sweeper);
+      for (const c of wsConns.values()) c.close();
       for (const w of waiters) w();
       httpServer.closeAllConnections?.();
       httpServer.close();
