@@ -17,7 +17,16 @@ The port already *receives* broadcasts correctly: it has a second socket on `255
 - Privacy VPNs (other address ranges) and mobile data (`rmnet*` / `ccmni*`, which can also use 100.64/10) stay excluded, as the port intends.
 - The list is sorted and the LAN lobby uses the first entry, so with MiniLAN connected `100.77.x.x` becomes the default.
 
-**Ready-made build:** [Zero Hour Android 1.4.0 + MiniLAN](https://github.com/Uss15/GeneralsZH-Android-Port/releases/tag/v1.4.0-minilan), built by GitHub Actions from [this branch](https://github.com/Uss15/GeneralsZH-Android-Port/compare/main...feat/android-lan-virtual-vpn). It's proposed upstream as [MYSOREZ/GeneralsZH-Android-Port#54](https://github.com/MYSOREZ/GeneralsZH-Android-Port/pull/54).
+**Ready-made build:** [Zero Hour Android 1.4.0 + MiniLAN](https://github.com/Uss15/GeneralsZH-Android-Port/releases/tag/v1.4.0-minilan) (`GeneralsZH-1.4.0-minilan2.apk`).
+
+- **What it is:** the **official 1.4.0 APK** with a 7-byte patch, signed with the port's public debug key, so it installs over the official app.
+  - In both engines, the interface label `ncm` becomes `tun`.
+  - versionCode is raised to 10402.
+- **Trade-off:** any VPN `tun` interface is listed, not only 100.64.0.0/10 ones, and USB NCM tethering drops off the list.
+- **Why not build from source:** a GitHub Actions build of the port's current `main` started on one phone but crashed on another before the main menu. The official release build is the one known to run.
+- **Everyone in a match must install the same APK**, because Zero Hour only joins identical builds.
+
+The proper source fix below is proposed upstream as [MYSOREZ/GeneralsZH-Android-Port#54](https://github.com/MYSOREZ/GeneralsZH-Android-Port/pull/54).
 
 Or apply the patch to a checkout of the port yourself:
 
