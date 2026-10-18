@@ -1,0 +1,19 @@
+{
+  "name": "minilan",
+  "version": "0.1.0",
+  "description": "Small Radmin/Hamachi-style virtual LAN: coordination server, relay, desktop and Android clients.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "server": "node server/server.js",
+    "client": "node client/main.js",
+    "test": "node --test test/*.test.js",
+    "vectors": "node test/make-vectors.js"
+  },
+  "optionalDependencies": {
+    "koffi": "^3.3.3"
+  },
+  "license": "MIT"
+}

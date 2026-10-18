@@ -1,0 +1,9 @@
+node_modules/
+minilan-data.json
+client/tun/wintun.dll
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+release/

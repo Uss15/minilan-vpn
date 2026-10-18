@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MiniLAN</string>
+    <!-- Server prefilled on first launch (set by the release build). -->
+    <string name="default_server" translatable="false"></string>
+</resources>

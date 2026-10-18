@@ -1,0 +1,290 @@
+{
+ "_note": "LAN ports per game. 'udp'/'tcp' are inbound ports allowed from strangers in public game rooms. Ranges are 'a-b'.",
+ "generals": {
+  "title": "C&C Generals (vanilla 1.08)",
+  "udp": [
+   "8086-8094"
+  ],
+  "tcp": [],
+  "tip": "Options → IP Address: pick your 100.77.x.x address, then Multiplayer → Network. Everyone needs the same game version (1.08)."
+ },
+ "generals-zh": {
+  "title": "C&C Generals Zero Hour (1.04)",
+  "udp": [
+   "8086-8094"
+  ],
+  "tcp": [],
+  "tip": "Options → IP Address: pick your 100.77.x.x address, then Multiplayer → Network. Everyone needs the same game version (ZH 1.04). GenTool is fine if everyone has it."
+ },
+ "generals-zh-steam": {
+  "title": "Zero Hour – Steam / EA App (C&C Ultimate Collection)",
+  "udp": [
+   "8086-8094"
+  ],
+  "tcp": [],
+  "tip": "Options → IP Address: pick your 100.77.x.x address, then Multiplayer → Network. Everyone needs the same game version. Steam/EA and CD 1.04 builds can mismatch; keep the whole room on one source."
+ },
+ "generals-zh-tsh": {
+  "title": "Zero Hour – TheSuperHackers community patch",
+  "udp": [
+   "8086-8094"
+  ],
+  "tcp": [],
+  "tip": "Options → IP Address: pick your 100.77.x.x address, then Multiplayer → Network. Everyone needs the same game version. Everyone on the same patch release."
+ },
+ "generals-zh-rotr": {
+  "title": "Zero Hour mod – Rise of the Reds",
+  "udp": [
+   "8086-8094"
+  ],
+  "tcp": [],
+  "tip": "Options → IP Address: pick your 100.77.x.x address, then Multiplayer → Network. Everyone needs the same game version. Same ROTR version for all players."
+ },
+ "generals-zh-shockwave": {
+  "title": "Zero Hour mod – ShockWave",
+  "udp": [
+   "8086-8094"
+  ],
+  "tcp": [],
+  "tip": "Options → IP Address: pick your 100.77.x.x address, then Multiplayer → Network. Everyone needs the same game version. Same ShockWave version for all players."
+ },
+ "generals-zh-contra": {
+  "title": "Zero Hour mod – Contra",
+  "udp": [
+   "8086-8094"
+  ],
+  "tcp": [],
+  "tip": "Options → IP Address: pick your 100.77.x.x address, then Multiplayer → Network. Everyone needs the same game version. Same Contra version for all players."
+ },
+ "generals-zh-untitled": {
+  "title": "Zero Hour mod – Untitled",
+  "udp": [
+   "8086-8094"
+  ],
+  "tcp": [],
+  "tip": "Options → IP Address: pick your 100.77.x.x address, then Multiplayer → Network. Everyone needs the same game version. Same mod version for all players."
+ },
+ "generals-zh-othermod": {
+  "title": "Zero Hour – other mod",
+  "udp": [
+   "8086-8094"
+  ],
+  "tcp": [],
+  "tip": "Options → IP Address: pick your 100.77.x.x address, then Multiplayer → Network. Everyone needs the same game version. Put the mod name and version in the room name."
+ },
+ "ra2": {
+  "title": "C&C Red Alert 2 / Yuri's Revenge",
+  "udp": [
+   "1234",
+   "8054",
+   "3074"
+  ],
+  "tcp": [],
+  "tip": "Original LAN uses IPX; use CnCNet/IPX-over-UDP wrapper, then LAN."
+ },
+ "tiberian-sun": {
+  "title": "C&C Tiberian Sun",
+  "udp": [
+   "1234"
+  ],
+  "tcp": [],
+  "tip": "Use the IPX-over-UDP wrapper."
+ },
+ "warcraft3": {
+  "title": "Warcraft III",
+  "udp": [
+   "6112"
+  ],
+  "tcp": [
+   "6112"
+  ],
+  "tip": "Local Area Network menu."
+ },
+ "starcraft": {
+  "title": "StarCraft / Brood War",
+  "udp": [
+   "6111-6112"
+  ],
+  "tcp": [
+   "6112"
+  ],
+  "tip": "Local Area Network (UDP)."
+ },
+ "diablo2": {
+  "title": "Diablo II",
+  "udp": [],
+  "tcp": [
+   "4000",
+   "6112-6119"
+  ],
+  "tip": "TCP/IP game, enter host's 100.77 address."
+ },
+ "aoe2": {
+  "title": "Age of Empires II (2000 / DirectPlay)",
+  "udp": [
+   "2300-2400",
+   "47624"
+  ],
+  "tcp": [
+   "2300-2400",
+   "47624"
+  ],
+  "tip": "Multiplayer → TCP/IP for Internet/LAN."
+ },
+ "aoe2hd": {
+  "title": "Age of Empires II HD / DE (LAN)",
+  "udp": [
+   "27015-27030"
+  ],
+  "tcp": [],
+  "tip": ""
+ },
+ "minecraft": {
+  "title": "Minecraft Java (Open to LAN)",
+  "udp": [
+   "4445"
+  ],
+  "tcp": [
+   "25565",
+   "1024-65535"
+  ],
+  "tip": "Open to LAN uses a random TCP port announced via multicast 224.0.2.60:4445."
+ },
+ "cs16": {
+  "title": "Counter-Strike 1.6 / Half-Life",
+  "udp": [
+   "27015-27020"
+  ],
+  "tcp": [
+   "27015"
+  ],
+  "tip": "LAN tab in server browser."
+ },
+ "source": {
+  "title": "Source games (CS:S, L4D2, Garry's Mod)",
+  "udp": [
+   "27015-27020",
+   "27005"
+  ],
+  "tcp": [
+   "27015"
+  ],
+  "tip": ""
+ },
+ "terraria": {
+  "title": "Terraria",
+  "udp": [],
+  "tcp": [
+   "7777"
+  ],
+  "tip": "Join via IP: host's 100.77 address."
+ },
+ "factorio": {
+  "title": "Factorio",
+  "udp": [
+   "34197"
+  ],
+  "tcp": [],
+  "tip": ""
+ },
+ "valheim": {
+  "title": "Valheim",
+  "udp": [
+   "2456-2458"
+  ],
+  "tcp": [],
+  "tip": "Join IP: host's 100.77 address:2456."
+ },
+ "stardew": {
+  "title": "Stardew Valley",
+  "udp": [
+   "24642"
+  ],
+  "tcp": [
+   "24642"
+  ],
+  "tip": ""
+ },
+ "halo": {
+  "title": "Halo: Combat Evolved / Custom Edition",
+  "udp": [
+   "2302-2303"
+  ],
+  "tcp": [],
+  "tip": ""
+ },
+ "bf1942": {
+  "title": "Battlefield 1942",
+  "udp": [
+   "14567",
+   "22000",
+   "23000-23009"
+  ],
+  "tcp": [],
+  "tip": ""
+ },
+ "mc-bedrock": {
+  "title": "Minecraft Bedrock (phone / Win10 / console LAN)",
+  "udp": [
+   "19132-19133"
+  ],
+  "tcp": [],
+  "tip": "Friends tab → LAN Games. Works phone ↔ PC. If it doesn't appear, Add Server with the host's 100.77 IP, port 19132."
+ },
+ "among-us": {
+  "title": "Among Us (Local)",
+  "udp": [
+   "47777",
+   "22023-22024"
+  ],
+  "tcp": [],
+  "tip": "Local → host creates game; others open Local to find it."
+ },
+ "mindustry": {
+  "title": "Mindustry",
+  "udp": [
+   "6567"
+  ],
+  "tcp": [
+   "6567"
+  ],
+  "tip": "Play → Join Game, or add the host's 100.77 IP."
+ },
+ "terraria-mobile": {
+  "title": "Terraria (mobile)",
+  "udp": [],
+  "tcp": [
+   "7777"
+  ],
+  "tip": "Multiplayer → Join via IP: host's 100.77 address."
+ },
+ "bombsquad": {
+  "title": "BombSquad",
+  "udp": [
+   "43210"
+  ],
+  "tcp": [],
+  "tip": "Gather → Local Network, or Manual with the host's 100.77 IP."
+ },
+ "worms-armageddon": {
+  "title": "Worms Armageddon / W:WMD LAN",
+  "udp": [
+   "17011",
+   "17012"
+  ],
+  "tcp": [
+   "17011"
+  ],
+  "tip": ""
+ },
+ "other": {
+  "title": "Other game (no port filter)",
+  "udp": [
+   "1-65535"
+  ],
+  "tcp": [
+   "1-65535"
+  ],
+  "tip": "Public room without the game firewall."
+ }
+}
