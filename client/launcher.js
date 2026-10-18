@@ -17,13 +17,13 @@ if (!cfg) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   console.log('\n=== MiniLAN setup ===\n');
   const name = (await rl.question(`Your player name [${os.hostname()}]: `)).trim() || os.hostname();
-  console.log('\n  1) Join a server (a friend hosts, or an online server)');
-  console.log('  2) Host the server on THIS PC (keep this PC on while people play)\n');
-  const mode = (await rl.question('Choose 1 or 2: ')).trim() === '2' ? 'host' : 'join';
-  let server = null;
-  // A release can ship a default server (default-server.txt next to the app) so players just press Enter.
-  const defFile = path.join(path.dirname(import.meta.filename), '..', 'default-server.txt');
+  // A release can ship a default server (default-server.txt next to MiniLAN.bat) so players just press Enter.
+  const defFile = path.join(path.dirname(import.meta.filename), '..', '..', 'default-server.txt');
   const def = fs.existsSync(defFile) ? fs.readFileSync(defFile, 'utf8').trim() : '';
+  console.log(`\n  1) Join a server${def ? ' (recommended: the MiniLAN online server, works from anywhere)' : ' (a friend hosts, or an online server)'}`);
+  console.log('  2) Host the server on THIS PC (keep this PC on while people play)\n');
+  const mode = (await rl.question(`Choose 1 or 2 [1]: `)).trim() === '2' ? 'host' : 'join';
+  let server = null;
   if (mode === 'join') {
     server = (await rl.question(`Server address${def ? ` [${def}]` : ' (e.g. 203.0.113.5 or http://vpn.example.com:8080)'}: `)).trim() || def;
     if (!/^https?:\/\//.test(server)) server = `http://${server}`;

@@ -2,6 +2,8 @@
 
 Every MiniLAN group needs **one server**. It introduces players to each other and passes traffic along when two players can't connect directly. Game traffic normally flows **directly between players**, so the server doesn't need to be powerful. It just needs to be **on while people play**.
 
+**You may not need to host at all:** the apps come set up with the **MiniLAN online server**. Everyone connects to it from any Wi-Fi or mobile data, with no port forwarding. One player taps **Create network** and friends **Join** with the name and password, just like Radmin. Host your own server only if you want full control, or to play on a hotspot without internet.
+
 Pick the option that fits your group:
 
 | | Who can join | Needs | Best for |

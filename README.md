@@ -10,6 +10,8 @@ A free, open-source virtual LAN for gaming, in the spirit of Radmin VPN and Hama
 - 🖥️ **Host it yourself.** Any player's PC **or Android phone** can be the server with one click. A phone hotspot works with no internet at all. You can also run it on a VPS or a network of relay servers. 👉 **[How to host](HOSTING.md)**
 - ✨ **One app look on PC and phone:** the same modern UI everywhere.
 
+> 🌍 **Online server included.** The apps come set up with the MiniLAN online server, so you can play with friends **anywhere, without port forwarding**: open the app, create a network, and share its name and password. Players connect directly to each other; the server introduces them and relays only when needed, over UDP or **Relay/TCP** for networks that block UDP.
+
 > ❤ **Like MiniLAN? [Support the project](https://github.com/sponsors/Uss15).** Click the **Sponsor** button at the top of this page.
 
 ---
@@ -24,7 +26,7 @@ Get both from the **[Releases](https://github.com/Uss15/minilan-vpn/releases)** 
 2. Double-click **`MiniLAN.bat`** and click **Yes** on the admin prompt. Admin is needed to create the "MiniLAN" network adapter.
 3. First run asks:
    - your **player name**
-   - **1) Join a server**: type the address your friend gave you, or
+   - **1) Join a server**: just press **Enter** to use the MiniLAN online server (works from anywhere), or type the address your friend gave you, or
    - **2) Host the server on this PC**: you play *and* host. Keep MiniLAN open while others play.
 4. Your browser opens the MiniLAN window (`http://127.0.0.1:7777`):
    - **Networks:** create a private network (name + password) or join one.
@@ -37,7 +39,7 @@ To host *without* playing on that PC (e.g. an always-on spare PC), double-click 
 ### Android (8.0+)
 
 1. Download **`MiniLAN-android.apk`** on your phone and open it. Allow "install unknown apps" for your browser when asked.
-2. Enter the server address and your name, tap **Connect**, and accept the VPN prompt.
+2. The online server is already filled in. Enter your name, tap **Connect**, and accept the VPN prompt.
    Or tap **📶 Host the server on this phone**: friends join your Wi-Fi or hotspot and connect to the address shown.
 3. Join a network, or open **Game rooms**, pick a game, then join or host.
 4. Switch to your game. MiniLAN keeps running with a notification, and phones and PCs see each other.

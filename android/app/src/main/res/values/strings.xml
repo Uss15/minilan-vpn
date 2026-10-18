@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name">MiniLAN</string>
     <!-- Server prefilled on first launch (set by the release build). -->
-    <string name="default_server" translatable="false"></string>
+    <string name="default_server" translatable="false">http://16.171.33.7:8080</string>
 </resources>

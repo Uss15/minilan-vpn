@@ -1,6 +1,6 @@
 {
   "name": "minilan",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Small Radmin/Hamachi-style virtual LAN: coordination server, relay, desktop and Android clients.",
   "type": "module",
   "engines": {
