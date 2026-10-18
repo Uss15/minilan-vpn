@@ -60,6 +60,11 @@ export class WintunTun extends EventEmitter {
     await run('netsh', ['interface', 'ipv4', 'set', 'address', `name=${ADAPTER}`, 'source=static', `address=${ip}`, `mask=${mask}`]);
     // Metric 1 makes Windows send 255.255.255.255 broadcasts and multicast (game LAN discovery) through MiniLAN.
     await run('netsh', ['interface', 'ipv4', 'set', 'interface', `interface=${ADAPTER}`, 'metric=1']).catch(() => {});
+    // Other VPNs (Radmin, Hamachi, ZeroTier) also use metric 1 and win ties; give our broadcast and multicast
+    // routes metric 0 for this session (ActiveStore: not persisted, gone when MiniLAN stops).
+    await run('powershell', ['-NoProfile', '-Command',
+      `foreach ($p in '255.255.255.255/32','224.0.0.0/4') { Set-NetRoute -InterfaceAlias '${ADAPTER}' -DestinationPrefix $p -RouteMetric 0 -PolicyStore ActiveStore -ErrorAction SilentlyContinue }`,
+    ]).catch(() => {});
     // Windows marks new adapters "Public", which blocks inbound game traffic. Opt in with MINILAN_PRIVATE=1.
     if (process.env.MINILAN_PRIVATE === '1') {
       await run('powershell', ['-NoProfile', '-Command', `Set-NetConnectionProfile -InterfaceAlias '${ADAPTER}' -NetworkCategory Private`]).catch(() => {});

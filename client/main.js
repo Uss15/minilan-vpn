@@ -73,6 +73,14 @@ await engine.start();
 
 // ---- local UI / control API ----
 const uiPath = new URL('./web/index.html', import.meta.url); // shared with the Android app
+
+// Other virtual-LAN VPNs that are up can capture game LAN broadcasts; tell the player.
+function otherVpns() {
+  const names = Object.keys(os.networkInterfaces());
+  return [['Radmin', 'Radmin VPN'], ['Hamachi', 'Hamachi'], ['ZeroTier', 'ZeroTier'], ['Tailscale', 'Tailscale']]
+    .filter(([pat]) => names.some((n) => n.toLowerCase().includes(pat.toLowerCase())))
+    .map(([, label]) => `${label} is running. It can hide LAN game lobbies (like Generals). Turn it off while you play with MiniLAN.`);
+}
 const hostOk = (h) => h === `127.0.0.1:${uiPort}` || h === `localhost:${uiPort}`;
 
 http.createServer(async (req, res) => {
@@ -87,6 +95,7 @@ http.createServer(async (req, res) => {
       return send(200, {
         ...engine.status(), connected: true, platform: 'pc',
         server: serverUrl, hosting: !!hosted, hostInfo, canSwitch: !!configPath, tun: tunKind, defaultServer: DEFAULT_SERVER,
+        warnings: otherVpns(),
       });
     }
     if (req.method === 'GET' && req.url === '/api/games') return send(200, games);

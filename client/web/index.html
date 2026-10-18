@@ -223,6 +223,7 @@
 </section>
 
 <main id="app">
+  <div id="warnings"></div>
   <!-- NETWORKS -->
   <section class="view on" id="v-home">
     <div class="grid2">
@@ -529,6 +530,7 @@ function render(s) {
   const sel = s.relays.find((r) => r.selected);
   $('#myRelay').textContent = sel ? `${sel.name}${sel.rtt != null ? ' · ' + sel.rtt + ' ms' : ''}` : '—';
   $('#myPeers').textContent = onlinePeers;
+  $('#warnings').innerHTML = (s.warnings || []).map((w) => `<div class="tip" style="border-color:rgba(255,181,71,.4);background:rgba(255,181,71,.08);color:var(--text)">⚠️ ${esc(w)}</div>`).join('');
   renderNetworks(s);
   renderServers(s);
   if (!wasConnected && selGame) loadRooms();
