@@ -45,8 +45,11 @@ class MiniLanVpnService : VpnService() {
                 .put("httpPort", it.boundHttpPort).put("udpPort", it.boundUdpPort).put("phone", true)
         }
 
+        /** Settings file per server. Android forbids '/' in these names, so the URL is hashed. */
+        private fun idPrefsName(server: String) = "id_" + Proto.sha256Hex(server).take(32)
+
         fun loadIdentity(ctx: Context, server: String): Identity {
-            val p = ctx.getSharedPreferences("id:$server", Context.MODE_PRIVATE)
+            val p = ctx.getSharedPreferences(idPrefsName(server), Context.MODE_PRIVATE)
             return Identity(
                 p.getString("priv", null)?.let { Base64.decode(it, Base64.NO_WRAP) },
                 p.getString("token", null), p.getInt("id", 0), p.getString("ip", null),
@@ -54,7 +57,7 @@ class MiniLanVpnService : VpnService() {
         }
 
         fun saveIdentity(ctx: Context, server: String, id: Identity) {
-            ctx.getSharedPreferences("id:$server", Context.MODE_PRIVATE).edit()
+            ctx.getSharedPreferences(idPrefsName(server), Context.MODE_PRIVATE).edit()
                 .putString("priv", id.priv?.let { Base64.encodeToString(it, Base64.NO_WRAP) })
                 .putString("token", id.token).putInt("id", id.id).putString("ip", id.ip).apply()
         }
