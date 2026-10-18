@@ -66,11 +66,15 @@ class InteropTest {
             assertEquals(7, bb.getShort(26).toInt())                // our sequence number
             println("interop OK: phone $myIp <-> pc ${peer.ip} via ${peer.path}")
 
-            // A PC's LAN broadcast (Generals lobby, UDP 8086) must arrive re-addressed to the phone's own IP.
+            // A PC's LAN broadcast (Generals lobby, UDP 8086) arrives twice: as the original broadcast (for games
+            // with a broadcast socket) and re-addressed to the phone's own IP (for Wine/Winlator games).
             sink.packets.clear()
             proc.outputStream.write("bcast\n".toByteArray()); proc.outputStream.flush()
+            val orig = sink.packets.poll(5, TimeUnit.SECONDS)
+            assertNotNull("broadcast not delivered", orig)
+            assertEquals(-1, ByteBuffer.wrap(orig!!).getInt(16))          // still 255.255.255.255
             val b = sink.packets.poll(5, TimeUnit.SECONDS)
-            assertNotNull("broadcast not delivered", b)
+            assertNotNull("unicast copy not delivered", b)
             val bbb = ByteBuffer.wrap(b!!)
             assertEquals(17, b[9].toInt())
             assertEquals(Proto.ipToInt(myIp), bbb.getInt(16))             // dst rewritten to us
@@ -78,7 +82,7 @@ class InteropTest {
             assertEquals(8086, bbb.getShort(22).toInt() and 0xffff)      // Generals lobby port
             assertEquals(0, checksum(b.copyOfRange(0, 20)))              // valid IP header checksum
             assertEquals("generals lobby", String(b, 28, b.size - 28))
-            println("broadcast OK: 255.255.255.255:8086 delivered as $myIp:8086")
+            println("broadcast OK: 255.255.255.255:8086 delivered as-is and as $myIp:8086")
 
             // The in-app API server must expose the same shape the shared web UI expects.
             val api = LocalApi({ File("../../client/web/index.html").inputStream() }, { JSONObject() }, { e }).start()

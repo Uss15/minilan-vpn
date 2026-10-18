@@ -524,15 +524,20 @@ class Engine(
                 val src = ByteBuffer.wrap(pt).getInt(12)
                 if (src != peer.ipInt) return
                 if (!allowedInbound(peer, pt)) return
-                runCatching { tunOut?.write(unicastBroadcast(pt)) }
+                runCatching {
+                    tunOut?.write(pt) // native ports (e.g. GeneralsZH Android) listen on 255.255.255.255:port
+                    val copy = unicastBroadcast(pt)
+                    if (copy !== pt) tunOut?.write(copy) // Wine/Winlator games only hear their own address
+                }
             }
         }
     }
 
     /**
      * Games running under Wine on Android (e.g. C&C Generals in Winlator) bind their UDP socket to our 100.77 address,
-     * and Linux doesn't deliver broadcasts to sockets bound to a unicast address. Re-address incoming LAN broadcasts
-     * (255.255.255.255 or 100.77.255.255) to our own IP so the game receives the lobby announcements.
+     * and Linux doesn't deliver broadcasts to sockets bound to a unicast address. A unicast copy of each incoming LAN
+     * broadcast (255.255.255.255 or 100.77.255.255), re-addressed to our own IP, lets those games hear lobby
+     * announcements; the original broadcast is delivered as well for games with a broadcast socket.
      */
     internal fun unicastBroadcast(pkt: ByteArray): ByteArray {
         if (pkt.size < 28 || (pkt[9].toInt() and 0xff) != 17) return pkt
