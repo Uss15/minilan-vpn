@@ -65,6 +65,11 @@ If the server runs on a home PC, friends outside your house can reach it only af
 
 Red Alert 2 / Tiberian Sun need an IPX-over-UDP wrapper (as in CnCNet) first.
 
+**Zero Hour on Android** ([GeneralsZH Android Port](https://github.com/MYSOREZ/GeneralsZH-Android-Port)):
+- The official build hides VPN addresses, so it can't use MiniLAN yet.
+- Use the patched build **[Zero Hour Android 1.4.0 + MiniLAN](https://github.com/Uss15/GeneralsZH-Android-Port/releases/tag/v1.4.0-minilan)** together with MiniLAN Android 0.3.4+. It installs over the official app.
+- The fix is proposed upstream in [MYSOREZ/GeneralsZH-Android-Port#54](https://github.com/MYSOREZ/GeneralsZH-Android-Port/pull/54). Details: [integrations/generalszh-android](integrations/generalszh-android).
+
 ### Windows Firewall
 
 MiniLAN adds firewall rules for itself and marks its adapter as a *Private* network, so games accept LAN traffic. If a game still can't be joined, allow that game in Windows Firewall.

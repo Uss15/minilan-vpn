@@ -17,7 +17,9 @@ The port already *receives* broadcasts correctly: it has a second socket on `255
 - Privacy VPNs (other address ranges) and mobile data (`rmnet*` / `ccmni*`, which can also use 100.64/10) stay excluded, as the port intends.
 - The list is sorted and the LAN lobby uses the first entry, so with MiniLAN connected `100.77.x.x` becomes the default.
 
-Apply it to a checkout of the port:
+**Ready-made build:** [Zero Hour Android 1.4.0 + MiniLAN](https://github.com/Uss15/GeneralsZH-Android-Port/releases/tag/v1.4.0-minilan), built by GitHub Actions from [this branch](https://github.com/Uss15/GeneralsZH-Android-Port/compare/main...feat/android-lan-virtual-vpn). It's proposed upstream as [MYSOREZ/GeneralsZH-Android-Port#54](https://github.com/MYSOREZ/GeneralsZH-Android-Port/pull/54).
+
+Or apply the patch to a checkout of the port yourself:
 
 ```bash
 git apply 0001-list-virtual-lan-vpn-addresses.patch
